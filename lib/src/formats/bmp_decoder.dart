@@ -96,9 +96,9 @@ class BmpDecoder extends Decoder {
         int b = row.readByte();
         int g = row.readByte();
         int r = row.readByte();
-        int a = info.infoHeader.bitCount == 32 ? row.readByte() : 255;
+        int a = info.infoHeader.bitCount == 32 ? 255 - row.readByte() : 255;
 
-        image.setPixel(x, y, getColor(r, g, b, 255-a));
+        image.setPixel(x, y, getColor(r, g, b, a));
       }
     }
 
