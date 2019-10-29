@@ -4,6 +4,7 @@ import '../animation.dart';
 import '../image.dart';
 
 import 'decoder.dart';
+import 'bmp_decoder.dart';
 import 'exr_decoder.dart';
 import 'gif_decoder.dart';
 import 'gif_encoder.dart';
@@ -60,6 +61,11 @@ Decoder findDecoderForData(List<int> data) {
     return exr;
   }
 
+  BmpDecoder bmp = BmpDecoder();
+  if (bmp.isValidFile(bytes)) {
+    return bmp;
+  }
+
   return null;
 }
 
@@ -112,6 +118,9 @@ Decoder getDecoderForNamedImage(String name) {
   }
   if (n.endsWith('.exr')) {
     return ExrDecoder();
+  }
+  if (n.endsWith('.bmp')) {
+    return BmpDecoder();
   }
   return null;
 }
@@ -292,4 +301,9 @@ Image decodePsd(List<int> bytes) {
 /// given [exposure] to a low-dynamic-range [Image].
 Image decodeExr(List<int> bytes, {double exposure = 1.0}) {
   return ExrDecoder(exposure: exposure).decodeImage(bytes);
+}
+
+/// Decode a BMP formatted image.
+Image decodeBmp(List<int> bytes) {
+  return BmpDecoder().decodeImage(bytes);
 }
