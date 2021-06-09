@@ -43,32 +43,33 @@ enum TrimMode {
 /// to the [copyCrop] function to crop the image.
 List<int> findTrim(Image src,
     {TrimMode mode = TrimMode.transparent, Trim sides = Trim.all}) {
-  int h = src.height;
-  int w = src.width;
+  var h = src.height;
+  var w = src.width;
 
-  int bg = (mode == TrimMode.topLeftColor)
+  final bg = (mode == TrimMode.topLeftColor)
       ? src.getPixel(0, 0)
-      : (mode == TrimMode.bottomRightColor) ? src.getPixel(w - 1, h - 1) : 0;
+      : (mode == TrimMode.bottomRightColor)
+          ? src.getPixel(w - 1, h - 1)
+          : 0;
 
-  int xmin = w;
-  int xmax = 0;
-  int ymin;
-  int ymax = 0;
+  var xmin = w;
+  var xmax = 0;
+  int? ymin;
+  var ymax = 0;
 
-  for (int y = 0; y < h; ++y) {
-    bool first = true;
-    for (int x = 0; x < w; ++x) {
-      int c = src.getPixel(x, y);
-      if ((mode == TrimMode.transparent && getAlpha(c) != 0) && (c != bg)) {
+  for (var y = 0; y < h; ++y) {
+    var first = true;
+    for (var x = 0; x < w; ++x) {
+      final c = src.getPixel(x, y);
+      if ((mode == TrimMode.transparent && getAlpha(c) != 0) ||
+          (mode != TrimMode.transparent && (c != bg))) {
         if (xmin > x) {
           xmin = x;
         }
         if (xmax < x) {
           xmax = x;
         }
-        if (ymin == null) {
-          ymin = y;
-        }
+        ymin ??= y;
 
         ymax = y;
 
@@ -78,6 +79,11 @@ List<int> findTrim(Image src,
         }
       }
     }
+  }
+
+  // A trim wasn't found
+  if (ymin == null) {
+    return [0, 0, w, h];
   }
 
   if (sides & Trim.top == false) {
@@ -114,10 +120,9 @@ Image trim(Image src,
     return Image.from(src);
   }
 
-  List<int> crop = findTrim(src, mode: mode, sides: sides);
+  final crop = findTrim(src, mode: mode, sides: sides);
 
-  Image dst = Image(crop[2], crop[3],
-      channels: Channels.rgba, exif: src.exif, iccp: src.iccProfile);
+  final dst = Image(crop[2], crop[3], exif: src.exif, iccp: src.iccProfile);
 
   copyInto(dst, src,
       srcX: crop[0], srcY: crop[1], srcW: crop[2], srcH: crop[3], blend: false);

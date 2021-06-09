@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import '../color.dart';
 import '../image.dart';
@@ -40,19 +39,26 @@ import '../internal/clamp.dart';
 /// [amount] controls how much affect this filter has on the [src] image, where
 /// 0.0 has no effect and 1.0 has full effect.
 Image adjustColor(Image src,
-    {int blacks,
-    int whites,
-    int mids,
-    num contrast,
-    num saturation,
-    num brightness,
-    num gamma,
-    num exposure,
-    num hue,
-    num amount}) {
+    {int? blacks,
+    int? whites,
+    int? mids,
+    num? contrast,
+    num? saturation,
+    num? brightness,
+    num? gamma,
+    num? exposure,
+    num? hue,
+    num? amount}) {
   if (amount == 0.0) {
     return src;
   }
+
+  contrast = contrast?.clamp(0, 1);
+  saturation = saturation?.clamp(0, 1);
+  brightness = brightness?.clamp(0, 1);
+  gamma = gamma?.clamp(0, 1000);
+  exposure = exposure?.clamp(0, 1000);
+  amount = amount?.clamp(0, 1000);
 
   const DEG_TO_RAD = 0.0174532925;
   const avgLumR = 0.5;
@@ -62,10 +68,11 @@ Image adjustColor(Image src,
   const lumCoeffG = 0.7154;
   const lumCoeffB = 0.0721;
 
-  num br, bg, bb;
-  num wr, wg, wb;
-  num mr, mg, mb;
-  if (blacks != null || whites != null || mids != null) {
+  final useBlacksWhitesMids = blacks != null || whites != null || mids != null;
+  late num br, bg, bb;
+  late num wr, wg, wb;
+  late num mr, mg, mb;
+  if (useBlacksWhitesMids) {
     br = blacks != null ? getRed(blacks) / 255.0 : 0.0;
     bg = blacks != null ? getGreen(blacks) / 255.0 : 0.0;
     bb = blacks != null ? getBlue(blacks) / 255.0 : 0.0;
@@ -83,52 +90,54 @@ Image adjustColor(Image src,
     mb = 1.0 / (1.0 + 2.0 * (mb - 0.5));
   }
 
-  num invSaturation = saturation != null ? 1.0 - saturation : 0.0;
-  num invContrast = contrast != null ? 1.0 - contrast : 0.0;
+  final num invSaturation =
+      saturation != null ? 1.0 - saturation.clamp(0, 1) : 0.0;
+  final num invContrast = contrast != null ? 1.0 - contrast.clamp(0, 1) : 0.0;
 
   if (exposure != null) {
     exposure = pow(2.0, exposure);
   }
 
-  num hueR;
-  num hueG;
-  num hueB;
+  late num hueR;
+  late num hueG;
+  late num hueB;
   if (hue != null) {
     hue *= DEG_TO_RAD;
-    var s = sin(hue);
-    var c = cos(hue);
+    final s = sin(hue);
+    final c = cos(hue);
 
     hueR = (2.0 * c) / 3.0;
     hueG = (-sqrt(3.0) * s - c) / 3.0;
     hueB = ((sqrt(3.0) * s - c) + 1.0) / 3.0;
   }
 
-  var invAmount = amount != null ? 1.0 - amount : 0.0;
+  final invAmount = amount != null ? 1.0 - amount.clamp(0, 1) : 0.0;
 
-  Uint8List pixels = src.getBytes();
-  for (int i = 0, len = pixels.length; i < len; i += 4) {
-    num or = pixels[i] / 255.0;
-    num og = pixels[i + 1] / 255.0;
-    num ob = pixels[i + 2] / 255.0;
+  final pixels = src.getBytes();
+  for (var i = 0, len = pixels.length; i < len; i += 4) {
+    final num or = pixels[i] / 255.0;
+    final num og = pixels[i + 1] / 255.0;
+    final num ob = pixels[i + 2] / 255.0;
 
-    num r = or;
-    num g = og;
-    num b = ob;
+    var r = or;
+    var g = og;
+    var b = ob;
 
-    if (br != null) {
+    if (useBlacksWhitesMids) {
       r = pow((r + br) * wr, mr);
       g = pow((g + bg) * wg, mg);
       b = pow((b + bb) * wb, mb);
     }
 
     if (brightness != null && brightness != 1.0) {
-      r *= brightness;
-      g *= brightness;
-      b *= brightness;
+      var b = brightness.clamp(0, 1000);
+      r *= b;
+      g *= b;
+      b *= b;
     }
 
     if (saturation != null) {
-      num lum = r * lumCoeffR + g * lumCoeffG + b * lumCoeffB;
+      final num lum = r * lumCoeffR + g * lumCoeffG + b * lumCoeffB;
 
       r = lum * invSaturation + r * saturation;
       g = lum * invSaturation + g * saturation;
@@ -154,9 +163,9 @@ Image adjustColor(Image src,
     }
 
     if (hue != null && hue != 0.0) {
-      num hr = r * hueR + g * hueG + b * hueB;
-      num hg = r * hueB + g * hueR + b * hueG;
-      num hb = r * hueG + g * hueB + b * hueR;
+      final hr = r * hueR + g * hueG + b * hueB;
+      final hg = r * hueB + g * hueR + b * hueG;
+      final hb = r * hueG + g * hueB + b * hueR;
 
       r = hr;
       g = hg;

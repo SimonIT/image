@@ -6,10 +6,12 @@ class TiffEntry {
   int tag;
   int type;
   int numValues;
-  int valueOffset;
+  int? valueOffset;
+  InputBuffer p;
 
-  TiffEntry(this.tag, this.type, this.numValues);
+  TiffEntry(this.tag, this.type, this.numValues, this.p);
 
+  @override
   String toString() {
     if (TiffImage.TAG_NAME.containsKey(tag)) {
       return '${TiffImage.TAG_NAME[tag]}: $type $numValues';
@@ -23,29 +25,62 @@ class TiffEntry {
 
   bool get isString => type == TYPE_ASCII;
 
-  int readValue(InputBuffer p) {
-    p.offset = valueOffset;
-    return _readValue(p);
+  int readValue() {
+    p.offset = valueOffset!;
+    return _readValue();
   }
 
-  List<int> readValues(InputBuffer p) {
-    p.offset = valueOffset;
-    var values = <int>[];
-    for (int i = 0; i < numValues; ++i) {
-      values.add(_readValue(p));
+  List<int> readValues() {
+    p.offset = valueOffset!;
+    final values = <int>[];
+    for (var i = 0; i < numValues; ++i) {
+      values.add(_readValue());
     }
     return values;
   }
 
-  String readString(InputBuffer p) {
+  String readString() {
     if (type != TYPE_ASCII) {
       throw ImageException('readString requires ASCII entity');
     }
     // TODO: ASCII fields can contain multiple strings, separated with a NULL.
-    return String.fromCharCodes(readValues(p));
+    return String.fromCharCodes(readValues());
   }
 
-  int _readValue(InputBuffer p) {
+  List read() {
+    p.offset = valueOffset!;
+    final values = <dynamic>[];
+    for (var i = 0; i < numValues; ++i) {
+      switch (type) {
+        case TYPE_BYTE:
+        case TYPE_ASCII:
+          values.add(p.readByte());
+          break;
+        case TYPE_SHORT:
+          values.add(p.readUint16());
+          break;
+        case TYPE_LONG:
+          values.add(p.readUint32());
+          break;
+        case TYPE_RATIONAL:
+          final num = p.readUint32();
+          final den = p.readUint32();
+          if (den != 0) {
+            values.add(num / den);
+          }
+          break;
+        case TYPE_FLOAT:
+          values.add(p.readFloat32());
+          break;
+        case TYPE_DOUBLE:
+          values.add(p.readFloat64());
+          break;
+      }
+    }
+    return values;
+  }
+
+  int _readValue() {
     switch (type) {
       case TYPE_BYTE:
       case TYPE_ASCII:
@@ -55,8 +90,8 @@ class TiffEntry {
       case TYPE_LONG:
         return p.readUint32();
       case TYPE_RATIONAL:
-        int num = p.readUint32();
-        int den = p.readUint32();
+        final num = p.readUint32();
+        final den = p.readUint32();
         if (den == 0) {
           return 0;
         }
@@ -79,18 +114,18 @@ class TiffEntry {
     return 0;
   }
 
-  static const int TYPE_BYTE = 1;
-  static const int TYPE_ASCII = 2;
-  static const int TYPE_SHORT = 3;
-  static const int TYPE_LONG = 4;
-  static const int TYPE_RATIONAL = 5;
-  static const int TYPE_SBYTE = 6;
-  static const int TYPE_UNDEFINED = 7;
-  static const int TYPE_SSHORT = 8;
-  static const int TYPE_SLONG = 9;
-  static const int TYPE_SRATIONAL = 10;
-  static const int TYPE_FLOAT = 11;
-  static const int TYPE_DOUBLE = 12;
+  static const TYPE_BYTE = 1;
+  static const TYPE_ASCII = 2;
+  static const TYPE_SHORT = 3;
+  static const TYPE_LONG = 4;
+  static const TYPE_RATIONAL = 5;
+  static const TYPE_SBYTE = 6;
+  static const TYPE_UNDEFINED = 7;
+  static const TYPE_SSHORT = 8;
+  static const TYPE_SLONG = 9;
+  static const TYPE_SRATIONAL = 10;
+  static const TYPE_FLOAT = 11;
+  static const TYPE_DOUBLE = 12;
 
   static const List<int> SIZE_OF_TYPE = [
     0, //  0 = n/a

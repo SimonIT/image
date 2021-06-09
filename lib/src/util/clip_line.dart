@@ -4,26 +4,27 @@
 /// Results are stored in [line].
 /// If [line] falls completely outside of [rect], false is returned, otherwise
 /// true is returned.
-bool clipLine(List<int> line, List<int> rect) {
-  int x0 = line[0];
-  int y0 = line[1];
-  int x1 = line[2];
-  int y1 = line[3];
-  int xmin = rect[0];
-  int ymin = rect[1];
-  int xmax = rect[2];
-  int ymax = rect[3];
 
-  const int INSIDE = 0; // 0000
-  const int LEFT = 1; // 0001
-  const int RIGHT = 2; // 0010
-  const int BOTTOM = 4; // 0100
-  const int TOP = 8; // 1000
+bool clipLine(List<int> line, List<int> rect) {
+  var x0 = line[0];
+  var y0 = line[1];
+  var x1 = line[2];
+  var y1 = line[3];
+  final xmin = rect[0];
+  final ymin = rect[1];
+  final xmax = rect[2];
+  final ymax = rect[3];
+
+  const INSIDE = 0; // 0000
+  const LEFT = 1; // 0001
+  const RIGHT = 2; // 0010
+  const BOTTOM = 4; // 0100
+  const TOP = 8; // 1000
 
   // Compute the bit code for a point (x, y) using the clip rectangle
   // bounded diagonally by (xmin, ymin), and (xmax, ymax)
   int _computeOutCode(int x, int y) {
-    int code = INSIDE; // initialised as being inside of clip window
+    var code = INSIDE; // initialised as being inside of clip window
     if (x < xmin) {
       // to the left of clip window
       code |= LEFT;
@@ -45,9 +46,9 @@ bool clipLine(List<int> line, List<int> rect) {
 
   // compute outcodes for P0, P1, and whatever point lies outside the clip
   // rectangle
-  int outcode0 = _computeOutCode(x0, y0);
-  int outcode1 = _computeOutCode(x1, y1);
-  bool accept = false;
+  var outcode0 = _computeOutCode(x0, y0);
+  var outcode1 = _computeOutCode(x1, y1);
+  var accept = false;
 
   while (true) {
     if ((outcode0 | outcode1) == 0) {
@@ -62,9 +63,9 @@ bool clipLine(List<int> line, List<int> rect) {
       // from an outside point to an intersection with clip edge
 
       // At least one endpoint is outside the clip rectangle; pick it.
-      int outcodeOut = outcode0 != 0 ? outcode0 : outcode1;
+      final outcodeOut = outcode0 != 0 ? outcode0 : outcode1;
 
-      int x, y;
+      int? x, y;
       // Now find the intersection point;
       // use formulas y = y0 + slope * (x - x0), x = x0 + (1 / slope) * (y - y0)
       if ((outcodeOut & TOP) != 0) {
@@ -88,12 +89,12 @@ bool clipLine(List<int> line, List<int> rect) {
       // Now we move outside point to intersection point to clip
       // and get ready for next pass.
       if (outcodeOut == outcode0) {
-        x0 = x;
-        y0 = y;
+        x0 = x!;
+        y0 = y!;
         outcode0 = _computeOutCode(x0, y0);
       } else {
-        x1 = x;
-        y1 = y;
+        x1 = x!;
+        y1 = y!;
         outcode1 = _computeOutCode(x1, y1);
       }
     }

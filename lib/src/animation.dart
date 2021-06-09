@@ -35,10 +35,10 @@ enum FrameType {
 /// into, and if the canvas should be cleared prior to drawing the frame.
 class Animation extends IterableBase<Image> {
   /// The canvas width for containing the animation.
-  int width;
+  int width = 0;
 
   /// The canvas height for containing the animation.
-  int height;
+  int height = 0;
 
   /// The suggested background color to clear the canvas with.
   int backgroundColor = 0xffffffff;
@@ -58,6 +58,7 @@ class Animation extends IterableBase<Image> {
   int get numFrames => frames.length;
 
   /// How many frames are in the animation?
+  @override
   int get length => frames.length;
 
   /// Get the frame at the given [index].
@@ -69,19 +70,24 @@ class Animation extends IterableBase<Image> {
   }
 
   /// The first frame of the animation.
+  @override
   Image get first => frames.first;
 
   /// The last frame of the animation.
+  @override
   Image get last => frames.last;
 
   /// Is the animation empty (no frames)?
+  @override
   bool get isEmpty => frames.isEmpty;
 
   /// Returns true if there is at least one frame in the animation.
+  @override
   bool get isNotEmpty => frames.isNotEmpty;
 
   /// Get the iterator for looping over the animation. This allows the
   /// Animation to be used in for-each loops:
   /// for (AnimationFrame frame in animation) { ... }
+  @override
   Iterator<Image> get iterator => frames.iterator;
 }

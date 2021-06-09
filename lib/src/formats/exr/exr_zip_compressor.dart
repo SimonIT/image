@@ -9,7 +9,7 @@ import 'exr_part.dart';
 
 abstract class ExrZipCompressor extends ExrCompressor {
   factory ExrZipCompressor(
-          ExrPart header, int maxScanLineSize, int numScanLines) =
+          ExrPart header, int? maxScanLineSize, int numScanLines) =
       InternalExrZipCompressor;
 }
 
@@ -18,72 +18,72 @@ class InternalExrZipCompressor extends InternalExrCompressor
   ZLibDecoder zlib = ZLibDecoder();
 
   InternalExrZipCompressor(
-      ExrPart header, int maxScanLineSize, this._numScanLines)
+      ExrPart header, int? maxScanLineSize, this._numScanLines)
       : super(header as InternalExrPart);
 
+  @override
   int numScanLines() => _numScanLines;
 
-  Uint8List compress(InputBuffer input, int x, int y, [int width, int height]) {
+  @override
+  Uint8List compress(InputBuffer input, int x, int y,
+      [int? width, int? height]) {
     throw ImageException('Zip compression not yet supported');
   }
 
+  @override
   Uint8List uncompress(InputBuffer input, int x, int y,
-      [int width, int height]) {
-    var data = zlib.decodeBytes(input.toUint8List());
+      [int? width, int? height]) {
+    final data = zlib.decodeBytes(input.toUint8List());
 
-    if (width == null) {
-      width = header.width;
-    }
-    if (height == null) {
-      height = header.linesInBuffer;
-    }
+    width ??= header.width;
+    height ??= header.linesInBuffer;
 
-    int minX = x;
-    int maxX = x + width - 1;
-    int minY = y;
-    int maxY = y + height - 1;
+    final minX = x;
+    var maxX = x + width! - 1;
+    final minY = y;
+    var maxY = y + height! - 1;
 
-    if (maxX > header.width) {
-      maxX = header.width - 1;
+    if (maxX > header.width!) {
+      maxX = header.width! - 1;
     }
-    if (maxY > header.height) {
-      maxY = header.height - 1;
+    if (maxY > header.height!) {
+      maxY = header.height! - 1;
     }
 
     decodedWidth = (maxX - minX) + 1;
     decodedHeight = (maxY - minY) + 1;
 
     // Predictor
-    for (int i = 1, len = data.length; i < len; ++i) {
+    for (var i = 1, len = data.length; i < len; ++i) {
       data[i] = data[i - 1] + data[i] - 128;
     }
 
     // Reorder the pixel data
-    if (_outCache == null || _outCache.length != data.length) {
+    if (_outCache == null || _outCache!.length != data.length) {
       _outCache = Uint8List(data.length);
     }
 
-    final int len = data.length;
-    int t1 = 0;
-    int t2 = (len + 1) ~/ 2;
-    int si = 0;
+    final len = data.length;
+    var t1 = 0;
+    var t2 = (len + 1) ~/ 2;
+    var si = 0;
 
     while (true) {
       if (si < len) {
-        _outCache[si++] = data[t1++];
+        _outCache![si++] = data[t1++];
       } else {
         break;
       }
       if (si < len) {
-        _outCache[si++] = data[t2++];
+        _outCache![si++] = data[t2++];
       } else {
         break;
       }
     }
 
-    return _outCache;
+    return _outCache!;
   }
 
-  int _numScanLines;
-  Uint8List _outCache;
+  final int _numScanLines;
+  Uint8List? _outCache;
 }

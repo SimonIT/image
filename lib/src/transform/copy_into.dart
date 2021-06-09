@@ -1,5 +1,5 @@
-import '../image.dart';
 import '../draw/draw_pixel.dart';
+import '../image.dart';
 
 /// Copies a rectangular portion of one image to another image. [dst] is the
 /// destination image, [src] is the source image identifier.
@@ -15,37 +15,29 @@ import '../draw/draw_pixel.dart';
 /// copy regions within the same image (if [dst] is the same as [src])
 /// but if the regions overlap the results will be unpredictable.
 Image copyInto(Image dst, Image src,
-    {int dstX,
-    int dstY,
-    int srcX,
-    int srcY,
-    int srcW,
-    int srcH,
+    {int? dstX,
+    int? dstY,
+    int? srcX,
+    int? srcY,
+    int? srcW,
+    int? srcH,
     bool blend = true}) {
-  if (dstX == null) {
-    dstX = 0;
-  }
-  if (dstY == null) {
-    dstY = 0;
-  }
-  if (srcX == null) {
-    srcX = 0;
-  }
-  if (srcY == null) {
-    srcY = 0;
-  }
-  if (srcW == null) {
-    srcW = src.width;
-  }
-  if (srcH == null) {
-    srcH = src.height;
-  }
+  dstX ??= 0;
+  dstY ??= 0;
+  srcX ??= 0;
+  srcY ??= 0;
+  srcW ??= src.width;
+  srcH ??= src.height;
 
-  for (int y = 0; y < srcH; ++y) {
-    for (int x = 0; x < srcW; ++x) {
-      if (blend) {
+  if (blend) {
+    for (var y = 0; y < srcH; ++y) {
+      for (var x = 0; x < srcW; ++x) {
         drawPixel(dst, dstX + x, dstY + y, src.getPixel(srcX + x, srcY + y));
-      } else {
+      }
+    }
+  } else {
+    for (var y = 0; y < srcH; ++y) {
+      for (var x = 0; x < srcW; ++x) {
         dst.setPixel(dstX + x, dstY + y, src.getPixel(srcX + x, srcY + y));
       }
     }

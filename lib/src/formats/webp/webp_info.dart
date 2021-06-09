@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../../internal/internal.dart';
 import '../../util/input_buffer.dart';
 import '../decode_info.dart';
@@ -6,10 +7,10 @@ import 'webp_frame.dart';
 // Features gathered from the bitstream
 class WebPInfo extends DecodeInfo {
   // enum Format
-  static const int FORMAT_UNDEFINED = 0;
-  static const int FORMAT_LOSSY = 1;
-  static const int FORMAT_LOSSLESS = 2;
-  static const int FORMAT_ANIMATED = 3;
+  static const FORMAT_UNDEFINED = 0;
+  static const FORMAT_LOSSY = 1;
+  static const FORMAT_LOSSLESS = 2;
+  static const FORMAT_ANIMATED = 3;
 
   // True if the bitstream contains an alpha channel.
   bool hasAlpha = false;
@@ -20,8 +21,8 @@ class WebPInfo extends DecodeInfo {
   // 0 = undefined (/mixed), 1 = lossy, 2 = lossless, 3 = animated
   int format = FORMAT_UNDEFINED;
 
-  // ICCP data string.
-  String iccp = '';
+  // ICCP data.
+  Uint8List? iccp = null;
 
   // EXIF data string.
   String exif = '';
@@ -35,15 +36,16 @@ class WebPInfo extends DecodeInfo {
   // Information about each animation frame.
   List<WebPFrame> frames = [];
 
+  @override
   int get numFrames => frames.length;
 
-  int _frame;
-  int _numFrames;
+  int _frame = 0;
+  int _numFrames = 0;
 
-  InputBuffer _alphaData;
-  int _alphaSize;
-  int _vp8Position;
-  int _vp8Size;
+  InputBuffer? _alphaData;
+  int _alphaSize = 0;
+  int _vp8Position = 0;
+  int _vp8Size = 0;
 }
 
 @internal
@@ -51,11 +53,12 @@ class InternalWebPInfo extends WebPInfo {
   int get frame => _frame;
   set frame(int value) => _frame = value;
 
+  @override
   int get numFrames => _numFrames;
   set numFrames(int value) => _numFrames = value;
 
-  InputBuffer get alphaData => _alphaData;
-  set alphaData(InputBuffer buffer) => _alphaData = buffer;
+  InputBuffer? get alphaData => _alphaData;
+  set alphaData(InputBuffer? buffer) => _alphaData = buffer;
 
   int get alphaSize => _alphaSize;
   set alphaSize(int value) => _alphaSize = value;

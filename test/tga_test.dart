@@ -2,51 +2,53 @@ import 'dart:io';
 import 'package:image/image.dart';
 import 'package:test/test.dart';
 
+import 'paths.dart';
+
 void main() {
-  Directory dir = Directory('res/tga');
+  final dir = Directory('test/res/tga');
   if (!dir.existsSync()) {
     return;
   }
-  var files = dir.listSync();
+  final files = dir.listSync();
 
   group('TGA', () {
-    for (var f in files) {
-      if (f is! File || !f.path.endsWith('.tga')) {
+    for (var f in files.whereType<File>()) {
+      if (!f.path.endsWith('.tga')) {
         continue;
       }
 
-      String name = f.path.split(RegExp(r'(/|\\)')).last;
-      test('$name', () {
-        List<int> bytes = (f as File).readAsBytesSync();
-        Image image = TgaDecoder().decodeImage(bytes);
+      final name = f.path.split(RegExp(r'(/|\\)')).last;
+      test(name, () {
+        final bytes = f.readAsBytesSync();
+        final image = TgaDecoder().decodeImage(bytes);
         if (image == null) {
           throw ImageException('Unable to decode TGA Image: $name.');
         }
 
-        List<int> png = PngEncoder().encodeImage(image);
-        File('out/tga/${name}.png')
+        final png = PngEncoder().encodeImage(image);
+        File('$tmpPath/out/tga/$name.png')
           ..createSync(recursive: true)
           ..writeAsBytesSync(png);
       });
     }
 
     test('decode/encode', () {
-      List<int> bytes = File('res/tga/globe.tga').readAsBytesSync();
+      final bytes = File('test/res/tga/globe.tga').readAsBytesSync();
 
       // Decode the image from file.
-      Image image = TgaDecoder().decodeImage(bytes);
+      final image = TgaDecoder().decodeImage(bytes)!;
       expect(image.width, equals(128));
       expect(image.height, equals(128));
 
       // Encode the image as a tga
-      List<int> tga = TgaEncoder().encodeImage(image);
+      final tga = TgaEncoder().encodeImage(image);
 
-      File('out/globe.tga')
+      File('$tmpPath/out/globe.tga')
         ..createSync(recursive: true)
         ..writeAsBytesSync(tga);
 
       // Decode the encoded image, make sure it's the same as the original.
-      Image image2 = TgaDecoder().decodeImage(tga);
+      final image2 = TgaDecoder().decodeImage(tga)!;
       expect(image2.width, equals(128));
       expect(image2.height, equals(128));
     });

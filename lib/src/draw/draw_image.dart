@@ -14,57 +14,39 @@ import 'draw_pixel.dart';
 /// copy regions within the same image (if [dst] is the same as [src])
 /// but if the regions overlap the results will be unpredictable.
 Image drawImage(Image dst, Image src,
-    {int dstX,
-    int dstY,
-    int dstW,
-    int dstH,
-    int srcX,
-    int srcY,
-    int srcW,
-    int srcH,
+    {int? dstX,
+    int? dstY,
+    int? dstW,
+    int? dstH,
+    int? srcX,
+    int? srcY,
+    int? srcW,
+    int? srcH,
     bool blend = true}) {
-  if (dstX == null) {
-    dstX = 0;
-  }
-  if (dstY == null) {
-    dstY = 0;
-  }
-  if (srcX == null) {
-    srcX = 0;
-  }
-  if (srcY == null) {
-    srcY = 0;
-  }
-  if (srcW == null) {
-    srcW = src.width;
-  }
-  if (srcH == null) {
-    srcH = src.height;
-  }
-  if (dstW == null) {
-    if (dst.width < src.width) {
-      dstW = dst.width;
-    } else {
-      dstW = src.width;
-    }
-  }
-  if (dstH == null) {
-    if (dst.height < dst.height) {
-      dstH = dst.height;
-    } else {
-      dstH = src.height;
-    }
-  }
-
-  for (int y = 0; y < dstH; ++y) {
-    for (int x = 0; x < dstW; ++x) {
-      int stepX = (x * (srcW / dstW)).toInt();
-      int stepY = (y * (srcH / dstH)).toInt();
-
-      final srcPixel = src.getPixel(srcX + stepX, srcY + stepY);
-      if (blend) {
+  dstX ??= 0;
+  dstY ??= 0;
+  srcX ??= 0;
+  srcY ??= 0;
+  srcW ??= src.width;
+  srcH ??= src.height;
+  dstW ??= (dst.width < src.width) ? dstW = dst.width : src.width;
+  dstH ??= (dst.height < src.height) ? dst.height : src.height;
+    
+  if (blend) {
+    for (var y = 0; y < dstH; ++y) {
+      for (var x = 0; x < dstW; ++x) {
+        final stepX = (x * (srcW / dstW)).toInt();
+        final stepY = (y * (srcH / dstH)).toInt();
+        final srcPixel = src.getPixel(srcX + stepX, srcY + stepY);
         drawPixel(dst, dstX + x, dstY + y, srcPixel);
-      } else {
+      }
+    }
+  } else {
+    for (var y = 0; y < dstH; ++y) {
+      for (var x = 0; x < dstW; ++x) {
+        final stepX = (x * (srcW / dstW)).toInt();
+        final stepY = (y * (srcH / dstH)).toInt();
+        final srcPixel = src.getPixel(srcX + stepX, srcY + stepY);
         dst.setPixel(dstX + x, dstY + y, srcPixel);
       }
     }

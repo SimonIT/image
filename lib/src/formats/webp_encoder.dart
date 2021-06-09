@@ -7,8 +7,8 @@ import 'encoder.dart';
 
 /// Encode an image to the PNG format.
 class WebPEncoder extends Encoder {
-  static const int LOSSLESS = 0;
-  static const int LOSSY = 1;
+  static const LOSSLESS = 0;
+  static const LOSSY = 1;
 
   int format;
   num quality;
@@ -21,12 +21,12 @@ class WebPEncoder extends Encoder {
   /// Add a frame to be encoded. Call [finish] to encode the added frames.
   /// If only one frame is added, a single-image WebP is encoded; otherwise
   /// if there are more than one frame, a multi-frame animated WebP is encoded.
-  void addFrame(Image image, {int duration}) {
+  void addFrame(Image image, {int? duration}) {
     if (output == null) {
       output = OutputBuffer();
 
       if (duration != null) {
-        this.delay = duration;
+        delay = duration;
       }
       _lastImage = _encodeImage(image);
       _width = image.width;
@@ -42,15 +42,15 @@ class WebPEncoder extends Encoder {
     _encodedFrames++;
 
     if (duration != null) {
-      this.delay = duration;
+      delay = duration;
     }
 
     _lastImage = _encodeImage(image);
   }
 
   /// Encode the images that were added with [addFrame].
-  List<int> finish() {
-    List<int> bytes;
+  List<int>? finish() {
+    List<int>? bytes;
     if (output == null) {
       return bytes;
     }
@@ -68,41 +68,42 @@ class WebPEncoder extends Encoder {
     _lastImage = null;
     _encodedFrames = 0;*/
 
-    bytes = output.getBytes();
+    bytes = output!.getBytes();
     output = null;
 
     return bytes;
   }
 
   /// Encode a single frame image.
+  @override
   List<int> encodeImage(Image image) {
     addFrame(image);
-    return finish();
+    return finish()!;
   }
 
   /// Does this encoder support animation?
+  @override
   bool get supportsAnimation => true;
 
   /// Encode an animation.
-  List<int> encodeAnimation(Animation anim) {
-    for (Image f in anim) {
+  @override
+  List<int>? encodeAnimation(Animation anim) {
+    for (var f in anim) {
       addFrame(f, duration: f.duration);
     }
     return finish();
   }
 
-  Uint8List _encodeImage(Image image) {
-    return null;
-  }
+  Uint8List? _encodeImage(Image image) => null;
 
-  void _writeHeader(int width, int height) {}
+  void _writeHeader(int? width, int? height) {}
 
-  void _addImage(Uint8List image, int width, int height) {}
+  void _addImage(Uint8List? image, int? width, int? height) {}
 
-  OutputBuffer output;
-  int delay;
-  Uint8List _lastImage;
-  int _width;
-  int _height;
+  OutputBuffer? output;
+  int? delay;
+  Uint8List? _lastImage;
+  int? _width;
+  int? _height;
   int _encodedFrames = 0;
 }

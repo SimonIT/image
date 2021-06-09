@@ -11,16 +11,16 @@ import 'webp_info.dart';
 // WebP lossy format.
 class VP8 {
   InputBuffer input;
-  InternalWebPInfo _webp;
+  final InternalWebPInfo _webp;
 
-  VP8(InputBuffer input, this._webp) : this.input = input;
+  VP8(this.input, this._webp);
 
   WebPInfo get webp => _webp;
 
   bool decodeHeader() {
-    int bits = input.readUint24();
+    final bits = input.readUint24();
 
-    final bool keyFrame = (bits & 1) == 0;
+    final keyFrame = (bits & 1) == 0;
     if (!keyFrame) {
       return false;
     }
@@ -38,7 +38,7 @@ class VP8 {
     _frameHeader.show = (bits >> 4) & 1;
     _frameHeader.partitionLength = (bits >> 5);
 
-    int signature = input.readUint24();
+    final signature = input.readUint24();
     if (signature != VP8_SIGNATURE) {
       return false;
     }
@@ -49,7 +49,7 @@ class VP8 {
     return true;
   }
 
-  Image decode() {
+  Image? decode() {
     if (!_getHeaders()) {
       return null;
     }
@@ -75,7 +75,7 @@ class VP8 {
     }
 
     _proba = VP8Proba();
-    for (int i = 0; i < NUM_MB_SEGMENTS; ++i) {
+    for (var i = 0; i < NUM_MB_SEGMENTS; ++i) {
       _dqm[i] = VP8QuantMatrix();
     }
 
@@ -124,23 +124,23 @@ class VP8 {
     return true;
   }
 
-  bool _parseSegmentHeader(VP8SegmentHeader hdr, VP8Proba proba) {
+  bool _parseSegmentHeader(VP8SegmentHeader hdr, VP8Proba? proba) {
     hdr.useSegment = br.get() != 0;
     if (hdr.useSegment) {
       hdr.updateMap = br.get() != 0;
       if (br.get() != 0) {
         // update data
         hdr.absoluteDelta = br.get() != 0;
-        for (int s = 0; s < NUM_MB_SEGMENTS; ++s) {
+        for (var s = 0; s < NUM_MB_SEGMENTS; ++s) {
           hdr.quantizer[s] = br.get() != 0 ? br.getSignedValue(7) : 0;
         }
-        for (int s = 0; s < NUM_MB_SEGMENTS; ++s) {
+        for (var s = 0; s < NUM_MB_SEGMENTS; ++s) {
           hdr.filterStrength[s] = br.get() != 0 ? br.getSignedValue(6) : 0;
         }
       }
       if (hdr.updateMap) {
-        for (int s = 0; s < MB_FEATURE_TREE_PROBS; ++s) {
-          proba.segments[s] = br.get() != 0 ? br.getValue(8) : 255;
+        for (var s = 0; s < MB_FEATURE_TREE_PROBS; ++s) {
+          proba!.segments[s] = br.get() != 0 ? br.getValue(8) : 255;
         }
       }
     } else {
@@ -151,7 +151,7 @@ class VP8 {
   }
 
   bool _parseFilterHeader() {
-    VP8FilterHeader hdr = _filterHeader;
+    final hdr = _filterHeader;
     hdr.simple = br.get() != 0;
     hdr.level = br.getValue(6);
     hdr.sharpness = br.getValue(3);
@@ -159,13 +159,13 @@ class VP8 {
     if (hdr.useLfDelta) {
       if (br.get() != 0) {
         // update lf-delta?
-        for (int i = 0; i < NUM_REF_LF_DELTAS; ++i) {
+        for (var i = 0; i < NUM_REF_LF_DELTAS; ++i) {
           if (br.get() != 0) {
             hdr.refLfDelta[i] = br.getSignedValue(6);
           }
         }
 
-        for (int i = 0; i < NUM_MODE_LF_DELTAS; ++i) {
+        for (var i = 0; i < NUM_MODE_LF_DELTAS; ++i) {
           if (br.get() != 0) {
             hdr.modeLfDelta[i] = br.getSignedValue(6);
           }
@@ -173,7 +173,11 @@ class VP8 {
       }
     }
 
-    _filterType = (hdr.level == 0) ? 0 : hdr.simple ? 1 : 2;
+    _filterType = (hdr.level == 0)
+        ? 0
+        : hdr.simple
+            ? 1
+            : 2;
 
     return true;
   }
@@ -187,50 +191,50 @@ class VP8 {
   // is returned, and this is an unrecoverable error.
   // If the partitions were positioned ok, VP8_STATUS_OK is returned.
   bool _parsePartitions(InputBuffer input) {
-    int sz = 0;
-    int bufEnd = input.length;
+    var sz = 0;
+    final bufEnd = input.length;
 
     _numPartitions = 1 << br.getValue(2);
-    int lastPart = _numPartitions - 1;
-    int partStart = lastPart * 3;
+    final lastPart = _numPartitions - 1;
+    var partStart = lastPart * 3;
     if (bufEnd < partStart) {
       // we can't even read the sizes with sz[]! That's a failure.
       return false;
     }
 
-    for (int p = 0; p < lastPart; ++p) {
-      InputBuffer szb = input.peekBytes(3, sz);
-      final int psize = szb[0] | (szb[1] << 8) | (szb[2] << 16);
-      int partEnd = partStart + psize;
+    for (var p = 0; p < lastPart; ++p) {
+      final szb = input.peekBytes(3, sz);
+      final psize = szb[0] | (szb[1] << 8) | (szb[2] << 16);
+      var partEnd = partStart + psize;
       if (partEnd > bufEnd) {
         partEnd = bufEnd;
       }
 
-      InputBuffer pin = input.subset(partEnd - partStart, position: partStart);
+      final pin = input.subset(partEnd - partStart, position: partStart);
       _partitions[p] = VP8BitReader(pin);
       partStart = partEnd;
       sz += 3;
     }
 
-    InputBuffer pin =
+    final pin =
         input.subset(bufEnd - partStart, position: input.position + partStart);
     _partitions[lastPart] = VP8BitReader(pin);
 
     // Init is ok, but there's not enough data
-    return (partStart < bufEnd) ? true : false;
+    return partStart < bufEnd;
   }
 
   void _parseQuant() {
-    final int base_q0 = br.getValue(7);
-    final int dqy1_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
-    final int dqy2_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
-    final int dqy2_ac = br.get() != 0 ? br.getSignedValue(4) : 0;
-    final int dquv_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
-    final int dquv_ac = br.get() != 0 ? br.getSignedValue(4) : 0;
+    final base_q0 = br.getValue(7);
+    final dqy1_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
+    final dqy2_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
+    final dqy2_ac = br.get() != 0 ? br.getSignedValue(4) : 0;
+    final dquv_dc = br.get() != 0 ? br.getSignedValue(4) : 0;
+    final dquv_ac = br.get() != 0 ? br.getSignedValue(4) : 0;
 
-    VP8SegmentHeader hdr = _segmentHeader;
+    final hdr = _segmentHeader;
 
-    for (int i = 0; i < NUM_MB_SEGMENTS; ++i) {
+    for (var i = 0; i < NUM_MB_SEGMENTS; ++i) {
       int q;
       if (hdr.useSegment) {
         q = hdr.quantizer[i];
@@ -246,7 +250,7 @@ class VP8 {
         }
       }
 
-      VP8QuantMatrix m = _dqm[i];
+      final m = _dqm[i]!;
       m.y1Mat[0] = DC_TABLE[_clip(q + dqy1_dc, 127)];
       m.y1Mat[1] = AC_TABLE[_clip(q + 0, 127)];
 
@@ -267,15 +271,15 @@ class VP8 {
   }
 
   void _parseProba() {
-    VP8Proba proba = _proba;
-    for (int t = 0; t < NUM_TYPES; ++t) {
-      for (int b = 0; b < NUM_BANDS; ++b) {
-        for (int c = 0; c < NUM_CTX; ++c) {
-          for (int p = 0; p < NUM_PROBAS; ++p) {
-            final int v = br.getBit(COEFFS_UPDATE_PROBA[t][b][c][p]) != 0
+    final proba = _proba;
+    for (var t = 0; t < NUM_TYPES; ++t) {
+      for (var b = 0; b < NUM_BANDS; ++b) {
+        for (var c = 0; c < NUM_CTX; ++c) {
+          for (var p = 0; p < NUM_PROBAS; ++p) {
+            final v = br.getBit(COEFFS_UPDATE_PROBA[t][b][c][p]) != 0
                 ? br.getValue(8)
                 : COEFFS_PROBA_0[t][b][c][p];
-            proba.bands[t][b].probas[c][p] = v;
+            proba!.bands[t][b].probas[c][p] = v;
           }
         }
       }
@@ -290,33 +294,37 @@ class VP8 {
   // Precompute the filtering strength for each segment and each i4x4/i16x16
   // mode.
   void _precomputeFilterStrengths() {
-    if (_filterType > 0) {
-      VP8FilterHeader hdr = _filterHeader;
-      for (int s = 0; s < NUM_MB_SEGMENTS; ++s) {
+    if (_filterType! > 0) {
+      final hdr = _filterHeader;
+      for (var s = 0; s < NUM_MB_SEGMENTS; ++s) {
         // First, compute the initial level
-        int baseLevel;
+        int? baseLevel;
         if (_segmentHeader.useSegment) {
           baseLevel = _segmentHeader.filterStrength[s];
           if (!_segmentHeader.absoluteDelta) {
-            baseLevel += hdr.level;
+            baseLevel += hdr.level!;
           }
         } else {
           baseLevel = hdr.level;
         }
 
-        for (int i4x4 = 0; i4x4 <= 1; ++i4x4) {
-          VP8FInfo info = _fStrengths[s][i4x4];
-          int level = baseLevel;
+        for (var i4x4 = 0; i4x4 <= 1; ++i4x4) {
+          final info = _fStrengths[s][i4x4];
+          var level = baseLevel;
           if (hdr.useLfDelta) {
-            level += hdr.refLfDelta[0];
+            level = level! + hdr.refLfDelta[0];
             if (i4x4 != 0) {
               level += hdr.modeLfDelta[0];
             }
           }
 
-          level = (level < 0) ? 0 : (level > 63) ? 63 : level;
+          level = (level! < 0)
+              ? 0
+              : (level > 63)
+                  ? 63
+                  : level;
           if (level > 0) {
-            int ilevel = level;
+            int? ilevel = level;
             if (hdr.sharpness > 0) {
               if (hdr.sharpness > 4) {
                 ilevel >>= 2;
@@ -335,7 +343,11 @@ class VP8 {
 
             info.fInnerLevel = ilevel;
             info.fLimit = 2 * level + ilevel;
-            info.hevThresh = (level >= 40) ? 2 : (level >= 15) ? 1 : 0;
+            info.hevThresh = (level >= 40)
+                ? 2
+                : (level >= 15)
+                    ? 1
+                    : 0;
           } else {
             info.fLimit = 0; // no filtering
           }
@@ -351,39 +363,36 @@ class VP8 {
       _alphaData = _webp.alphaData;
     }
 
-    _fStrengths = List<List<VP8FInfo>>(NUM_MB_SEGMENTS);
-    for (int i = 0; i < NUM_MB_SEGMENTS; ++i) {
-      _fStrengths[i] = [VP8FInfo(), VP8FInfo()];
-    }
+    _fStrengths = List<List<VP8FInfo>>.generate(
+        NUM_MB_SEGMENTS, (i) => [VP8FInfo(), VP8FInfo()],
+        growable: false);
 
-    _yuvT = List<VP8TopSamples>(_mbWidth);
-    for (int i = 0; i < _mbWidth; ++i) {
-      _yuvT[i] = VP8TopSamples();
-    }
+    _yuvT = List<VP8TopSamples>.generate(_mbWidth!, (_) => VP8TopSamples(),
+        growable: false);
 
     _yuvBlock = Uint8List(YUV_SIZE);
 
-    _intraT = Uint8List(4 * _mbWidth);
+    _intraT = Uint8List(4 * _mbWidth!);
 
-    _cacheYStride = 16 * _mbWidth;
-    _cacheUVStride = 8 * _mbWidth;
+    _cacheYStride = 16 * _mbWidth!;
+    _cacheUVStride = 8 * _mbWidth!;
 
-    final int extra_rows = FILTER_EXTRA_ROWS[_filterType];
-    final int extra_y = extra_rows * _cacheYStride;
-    final int extra_uv = (extra_rows ~/ 2) * _cacheUVStride;
+    final extra_rows = FILTER_EXTRA_ROWS[_filterType!];
+    final extra_y = extra_rows * _cacheYStride!;
+    final extra_uv = (extra_rows ~/ 2) * _cacheUVStride!;
 
     _cacheY =
-        InputBuffer(Uint8List(16 * _cacheYStride + extra_y), offset: extra_y);
+        InputBuffer(Uint8List(16 * _cacheYStride! + extra_y), offset: extra_y);
 
-    _cacheU =
-        InputBuffer(Uint8List(8 * _cacheUVStride + extra_uv), offset: extra_uv);
+    _cacheU = InputBuffer(Uint8List(8 * _cacheUVStride! + extra_uv),
+        offset: extra_uv);
 
-    _cacheV =
-        InputBuffer(Uint8List(8 * _cacheUVStride + extra_uv), offset: extra_uv);
+    _cacheV = InputBuffer(Uint8List(8 * _cacheUVStride! + extra_uv),
+        offset: extra_uv);
 
     _tmpY = InputBuffer(Uint8List(webp.width));
 
-    final int uvWidth = (webp.width + 1) >> 1;
+    final uvWidth = (webp.width + 1) >> 1;
     _tmpU = InputBuffer(Uint8List(uvWidth));
     _tmpV = InputBuffer(Uint8List(uvWidth));
 
@@ -397,7 +406,7 @@ class VP8 {
     // top-left corner of the picture (MB #0). We must filter all the previous
     // macroblocks.
     {
-      final int extraPixels = FILTER_EXTRA_ROWS[_filterType];
+      final extraPixels = FILTER_EXTRA_ROWS[_filterType!];
       if (_filterType == 2) {
         // For complex filter, we need to preserve the dependency chain.
         _tlMbX = 0;
@@ -408,7 +417,7 @@ class VP8 {
         // vertical or horizontal filtering of the previous macroblock can
         // modify some abutting pixels.
         _tlMbX = (_cropLeft - extraPixels) ~/ 16;
-        _tlMbY = (_cropTop - extraPixels) ~/ 16;
+        _tlMbY = (_cropTop! - extraPixels) ~/ 16;
         if (_tlMbX < 0) {
           _tlMbX = 0;
         }
@@ -418,25 +427,21 @@ class VP8 {
       }
 
       // We need some 'extra' pixels on the right/bottom.
-      _brMbY = (_cropBottom + 15 + extraPixels) ~/ 16;
+      _brMbY = (_cropBottom! + 15 + extraPixels) ~/ 16;
       _brMbX = (_cropRight + 15 + extraPixels) ~/ 16;
-      if (_brMbX > _mbWidth) {
+      if (_brMbX! > _mbWidth!) {
         _brMbX = _mbWidth;
       }
-      if (_brMbY > _mbHeight) {
+      if (_brMbY! > _mbHeight!) {
         _brMbY = _mbHeight;
       }
     }
 
-    _mbInfo = List<VP8MB>(_mbWidth + 1);
-    _mbData = List<VP8MBData>(_mbWidth);
-    _fInfo = List<VP8FInfo>(_mbWidth);
-
-    for (int i = 0; i < _mbWidth; ++i) {
-      _mbInfo[i] = VP8MB();
-      _mbData[i] = VP8MBData();
-    }
-    _mbInfo[_mbWidth] = VP8MB();
+    _mbInfo =
+        List<VP8MB>.generate(_mbWidth! + 1, (_) => VP8MB(), growable: false);
+    _mbData = List<VP8MBData>.generate(_mbWidth!, (_) => VP8MBData(),
+        growable: false);
+    _fInfo = List<VP8FInfo?>.filled(_mbWidth!, null);
 
     _precomputeFilterStrengths();
 
@@ -446,17 +451,17 @@ class VP8 {
   }
 
   bool _parseFrame() {
-    for (_mbY = 0; _mbY < _brMbY; ++_mbY) {
+    for (_mbY = 0; _mbY < _brMbY!; ++_mbY) {
       // Parse bitstream for this row.
-      VP8BitReader tokenBr = _partitions[_mbY & (_numPartitions - 1)];
-      for (; _mbX < _mbWidth; ++_mbX) {
+      final tokenBr = _partitions[_mbY & (_numPartitions - 1)];
+      for (; _mbX < _mbWidth!; ++_mbX) {
         if (!_decodeMB(tokenBr)) {
           return false;
         }
       }
 
       // Prepare for next scanline
-      VP8MB left = _mbInfo[0];
+      final left = _mbInfo[0];
       left.nz = 0;
       left.nzDc = 0;
       _intraL.fillRange(0, _intraL.length, B_DC_PRED);
@@ -474,36 +479,37 @@ class VP8 {
   bool _processRow() {
     _reconstructRow();
 
-    bool useFilter = (_filterType > 0) && (_mbY >= _tlMbY) && (_mbY <= _brMbY);
+    final useFilter =
+        (_filterType! > 0) && (_mbY >= _tlMbY) && (_mbY <= _brMbY!);
     return _finishRow(useFilter);
   }
 
   void _reconstructRow() {
-    int mb_y = _mbY;
-    InputBuffer y_dst = InputBuffer(_yuvBlock, offset: Y_OFF);
-    InputBuffer u_dst = InputBuffer(_yuvBlock, offset: U_OFF);
-    InputBuffer v_dst = InputBuffer(_yuvBlock, offset: V_OFF);
+    final mb_y = _mbY;
+    final y_dst = InputBuffer(_yuvBlock, offset: Y_OFF);
+    final u_dst = InputBuffer(_yuvBlock, offset: U_OFF);
+    final v_dst = InputBuffer(_yuvBlock, offset: V_OFF);
 
-    for (int mb_x = 0; mb_x < _mbWidth; ++mb_x) {
-      VP8MBData block = _mbData[mb_x];
+    for (var mb_x = 0; mb_x < _mbWidth!; ++mb_x) {
+      final block = _mbData[mb_x];
 
       // Rotate in the left samples from previously decoded block. We move four
       // pixels at a time for alignment reason, and because of in-loop filter.
       if (mb_x > 0) {
-        for (int j = -1; j < 16; ++j) {
+        for (var j = -1; j < 16; ++j) {
           y_dst.memcpy(j * BPS - 4, 4, y_dst, j * BPS + 12);
         }
 
-        for (int j = -1; j < 8; ++j) {
+        for (var j = -1; j < 8; ++j) {
           u_dst.memcpy(j * BPS - 4, 4, u_dst, j * BPS + 4);
           v_dst.memcpy(j * BPS - 4, 4, v_dst, j * BPS + 4);
         }
       } else {
-        for (int j = 0; j < 16; ++j) {
+        for (var j = 0; j < 16; ++j) {
           y_dst[j * BPS - 1] = 129;
         }
 
-        for (int j = 0; j < 8; ++j) {
+        for (var j = 0; j < 8; ++j) {
           u_dst[j * BPS - 1] = 129;
           v_dst[j * BPS - 1] = 129;
         }
@@ -515,9 +521,9 @@ class VP8 {
       }
 
       // bring top samples into the cache
-      VP8TopSamples top_yuv = _yuvT[mb_x];
-      Int16List coeffs = block.coeffs;
-      int bits = block.nonZeroY;
+      final top_yuv = _yuvT[mb_x];
+      final coeffs = block.coeffs;
+      var bits = block.nonZeroY;
 
       if (mb_y > 0) {
         y_dst.memcpy(-BPS, 16, top_yuv.y);
@@ -534,11 +540,11 @@ class VP8 {
       // predict and add residuals
       if (block.isIntra4x4) {
         // 4x4
-        InputBuffer topRight = InputBuffer.from(y_dst, offset: -BPS + 16);
-        Uint32List topRight32 = topRight.toUint32List();
+        final topRight = InputBuffer.from(y_dst, offset: -BPS + 16);
+        final topRight32 = topRight.toUint32List();
 
         if (mb_y > 0) {
-          if (mb_x >= _mbWidth - 1) {
+          if (mb_x >= _mbWidth! - 1) {
             // on rightmost border
             topRight.memset(0, 4, top_yuv.y[15]);
           } else {
@@ -547,73 +553,73 @@ class VP8 {
         }
 
         // replicate the top-right pixels below
-        int p = topRight32[0];
+        final p = topRight32[0];
         topRight32[3 * BPS] = p;
         topRight32[2 * BPS] = p;
         topRight32[BPS] = p;
 
         // predict and add residuals for all 4x4 blocks in turn.
-        for (int n = 0; n < 16; ++n, bits = (bits << 2) & 0xffffffff) {
-          InputBuffer dst = InputBuffer.from(y_dst, offset: kScan[n]);
+        for (var n = 0; n < 16; ++n, bits = (bits << 2) & 0xffffffff) {
+          final dst = InputBuffer.from(y_dst, offset: kScan[n]);
 
           VP8Filter.PredLuma4[block.imodes[n]](dst);
 
-          _doTransform(bits, InputBuffer(coeffs, offset: n * 16), dst);
+          _doTransform(bits!, InputBuffer(coeffs, offset: n * 16), dst);
         }
       } else {
         // 16x16
-        int predFunc = _checkMode(mb_x, mb_y, block.imodes[0]);
+        final predFunc = _checkMode(mb_x, mb_y, block.imodes[0])!;
 
         VP8Filter.PredLuma16[predFunc](y_dst);
         if (bits != 0) {
-          for (int n = 0; n < 16; ++n, bits = (bits << 2) & 0xffffffff) {
-            InputBuffer dst = InputBuffer.from(y_dst, offset: kScan[n]);
+          for (var n = 0; n < 16; ++n, bits = (bits << 2) & 0xffffffff) {
+            final dst = InputBuffer.from(y_dst, offset: kScan[n]);
 
-            _doTransform(bits, InputBuffer(coeffs, offset: n * 16), dst);
+            _doTransform(bits!, InputBuffer(coeffs, offset: n * 16), dst);
           }
         }
       }
 
       // Chroma
-      int bits_uv = block.nonZeroUV;
-      int pred_func = _checkMode(mb_x, mb_y, block.uvmode);
+      final bits_uv = block.nonZeroUV;
+      final pred_func = _checkMode(mb_x, mb_y, block.uvmode)!;
       VP8Filter.PredChroma8[pred_func](u_dst);
       VP8Filter.PredChroma8[pred_func](v_dst);
 
-      InputBuffer c1 = InputBuffer(coeffs, offset: 16 * 16);
+      final c1 = InputBuffer(coeffs, offset: 16 * 16);
       _doUVTransform(bits_uv, c1, u_dst);
 
-      InputBuffer c2 = InputBuffer(coeffs, offset: 20 * 16);
+      final c2 = InputBuffer(coeffs, offset: 20 * 16);
       _doUVTransform(bits_uv >> 8, c2, v_dst);
 
       // stash away top samples for next block
-      if (mb_y < _mbHeight - 1) {
+      if (mb_y < _mbHeight! - 1) {
         top_yuv.y.setRange(0, 16, y_dst.toUint8List(), 15 * BPS);
         top_yuv.u.setRange(0, 8, u_dst.toUint8List(), 7 * BPS);
         top_yuv.v.setRange(0, 8, v_dst.toUint8List(), 7 * BPS);
       }
 
       // Transfer reconstructed samples from yuv_b_ cache to final destination.
-      int y_out = mb_x * 16; // dec->cache_y_ +
-      int u_out = mb_x * 8; // dec->cache_u_ +
-      int v_out = mb_x * 8; // _dec->cache_v_ +
+      final y_out = mb_x * 16; // dec->cache_y_ +
+      final u_out = mb_x * 8; // dec->cache_u_ +
+      final v_out = mb_x * 8; // _dec->cache_v_ +
 
-      for (int j = 0; j < 16; ++j) {
-        int start = y_out + j * _cacheYStride;
+      for (var j = 0; j < 16; ++j) {
+        final start = y_out + j * _cacheYStride!;
         _cacheY.memcpy(start, 16, y_dst, j * BPS);
       }
 
-      for (int j = 0; j < 8; ++j) {
-        int start = u_out + j * _cacheUVStride;
+      for (var j = 0; j < 8; ++j) {
+        var start = u_out + j * _cacheUVStride!;
         _cacheU.memcpy(start, 8, u_dst, j * BPS);
 
-        start = v_out + j * _cacheUVStride;
+        start = v_out + j * _cacheUVStride!;
         _cacheV.memcpy(start, 8, v_dst, j * BPS);
       }
     }
   }
 
-  static const List<int> kScan = [
+  static const kScan = <int>[
     0 + 0 * BPS,
     4 + 0 * BPS,
     8 + 0 * BPS,
@@ -632,7 +638,7 @@ class VP8 {
     12 + 12 * BPS
   ];
 
-  static int _checkMode(int mb_x, int mb_y, int mode) {
+  static int? _checkMode(int mb_x, int mb_y, int? mode) {
     if (mode == B_DC_PRED) {
       if (mb_x == 0) {
         return (mb_y == 0) ? B_DC_PRED_NOTOPLEFT : B_DC_PRED_NOLEFT;
@@ -683,11 +689,11 @@ class VP8 {
   static const List<int> kFilterExtraRows = [0, 2, 8];
 
   void _doFilter(int mbX, int mbY) {
-    final int yBps = _cacheYStride;
-    VP8FInfo fInfo = _fInfo[mbX];
-    InputBuffer yDst = InputBuffer.from(_cacheY, offset: mbX * 16);
-    final int ilevel = fInfo.fInnerLevel;
-    final int limit = fInfo.fLimit;
+    final yBps = _cacheYStride;
+    final fInfo = _fInfo[mbX]!;
+    final yDst = InputBuffer.from(_cacheY, offset: mbX * 16);
+    final ilevel = fInfo.fInnerLevel;
+    final limit = fInfo.fLimit;
     if (limit == 0) {
       return;
     }
@@ -695,46 +701,46 @@ class VP8 {
     if (_filterType == 1) {
       // simple
       if (mbX > 0) {
-        _dsp.simpleHFilter16(yDst, yBps, limit + 4);
+        _dsp.simpleHFilter16(yDst, yBps!, limit + 4);
       }
       if (fInfo.fInner) {
-        _dsp.simpleHFilter16i(yDst, yBps, limit);
+        _dsp.simpleHFilter16i(yDst, yBps!, limit);
       }
       if (mbY > 0) {
-        _dsp.simpleVFilter16(yDst, yBps, limit + 4);
+        _dsp.simpleVFilter16(yDst, yBps!, limit + 4);
       }
       if (fInfo.fInner) {
-        _dsp.simpleVFilter16i(yDst, yBps, limit);
+        _dsp.simpleVFilter16i(yDst, yBps!, limit);
       }
     } else {
       // complex
-      final int uvBps = _cacheUVStride;
-      InputBuffer uDst = InputBuffer.from(_cacheU, offset: mbX * 8);
-      InputBuffer vDst = InputBuffer.from(_cacheV, offset: mbX * 8);
+      final uvBps = _cacheUVStride;
+      final uDst = InputBuffer.from(_cacheU, offset: mbX * 8);
+      final vDst = InputBuffer.from(_cacheV, offset: mbX * 8);
 
-      final int hevThresh = fInfo.hevThresh;
+      final hevThresh = fInfo.hevThresh;
       if (mbX > 0) {
-        _dsp.hFilter16(yDst, yBps, limit + 4, ilevel, hevThresh);
-        _dsp.hFilter8(uDst, vDst, uvBps, limit + 4, ilevel, hevThresh);
+        _dsp.hFilter16(yDst, yBps!, limit + 4, ilevel, hevThresh);
+        _dsp.hFilter8(uDst, vDst, uvBps!, limit + 4, ilevel, hevThresh);
       }
       if (fInfo.fInner) {
-        _dsp.hFilter16i(yDst, yBps, limit, ilevel, hevThresh);
-        _dsp.hFilter8i(uDst, vDst, uvBps, limit, ilevel, hevThresh);
+        _dsp.hFilter16i(yDst, yBps!, limit, ilevel, hevThresh);
+        _dsp.hFilter8i(uDst, vDst, uvBps!, limit, ilevel!, hevThresh);
       }
       if (mbY > 0) {
-        _dsp.vFilter16(yDst, yBps, limit + 4, ilevel, hevThresh);
-        _dsp.vFilter8(uDst, vDst, uvBps, limit + 4, ilevel, hevThresh);
+        _dsp.vFilter16(yDst, yBps!, limit + 4, ilevel, hevThresh);
+        _dsp.vFilter8(uDst, vDst, uvBps!, limit + 4, ilevel, hevThresh);
       }
       if (fInfo.fInner) {
-        _dsp.vFilter16i(yDst, yBps, limit, ilevel, hevThresh);
-        _dsp.vFilter8i(uDst, vDst, uvBps, limit, ilevel, hevThresh);
+        _dsp.vFilter16i(yDst, yBps!, limit, ilevel, hevThresh);
+        _dsp.vFilter8i(uDst, vDst, uvBps!, limit, ilevel!, hevThresh);
       }
     }
   }
 
   // Filter the decoded macroblock row (if needed)
   void _filterRow() {
-    for (int mbX = _tlMbX; mbX < _brMbX; ++mbX) {
+    for (var mbX = _tlMbX; mbX < _brMbX!; ++mbX) {
       _doFilter(mbX, _mbY);
     }
   }
@@ -752,17 +758,17 @@ class VP8 {
   //  * we must clip the remaining pixels against the cropping area. The VP8Io
   //    struct must have the following fields set correctly before calling put():
   bool _finishRow(bool useFilter) {
-    final int extraYRows = kFilterExtraRows[_filterType];
-    final int ySize = extraYRows * _cacheYStride;
-    final int uvSize = (extraYRows ~/ 2) * _cacheUVStride;
-    InputBuffer yDst = InputBuffer.from(_cacheY, offset: -ySize);
-    InputBuffer uDst = InputBuffer.from(_cacheU, offset: -uvSize);
-    InputBuffer vDst = InputBuffer.from(_cacheV, offset: -uvSize);
-    final int mbY = _mbY;
-    final bool isFirstRow = (mbY == 0);
-    final bool isLastRow = (mbY >= _brMbY - 1);
-    int yStart = MACROBLOCK_VPOS(mbY);
-    int yEnd = MACROBLOCK_VPOS(mbY + 1);
+    final extraYRows = kFilterExtraRows[_filterType!];
+    final ySize = extraYRows * _cacheYStride!;
+    final uvSize = (extraYRows ~/ 2) * _cacheUVStride!;
+    final yDst = InputBuffer.from(_cacheY, offset: -ySize);
+    final uDst = InputBuffer.from(_cacheU, offset: -uvSize);
+    final vDst = InputBuffer.from(_cacheV, offset: -uvSize);
+    final mbY = _mbY;
+    final isFirstRow = (mbY == 0);
+    final isLastRow = (mbY >= _brMbY! - 1);
+    int? yStart = MACROBLOCK_VPOS(mbY);
+    int? yEnd = MACROBLOCK_VPOS(mbY + 1);
 
     if (useFilter) {
       _filterRow();
@@ -787,47 +793,47 @@ class VP8 {
       yEnd -= extraYRows;
     }
 
-    if (yEnd > _cropBottom) {
+    if (yEnd > _cropBottom!) {
       yEnd = _cropBottom; // make sure we don't overflow on last row.
     }
 
     _a = null;
-    if (_alphaData != null && yStart < yEnd) {
+    if (_alphaData != null && yStart < yEnd!) {
       _a = _decompressAlphaRows(yStart, yEnd - yStart);
       if (_a == null) {
         return false;
       }
     }
 
-    if (yStart < _cropTop) {
-      final int deltaY = _cropTop - yStart;
+    if (yStart < _cropTop!) {
+      final deltaY = _cropTop! - yStart;
       yStart = _cropTop;
 
-      _y.offset += _cacheYStride * deltaY;
-      _u.offset += _cacheUVStride * (deltaY >> 1);
-      _v.offset += _cacheUVStride * (deltaY >> 1);
+      _y.offset += _cacheYStride! * deltaY;
+      _u.offset += _cacheUVStride! * (deltaY >> 1);
+      _v.offset += _cacheUVStride! * (deltaY >> 1);
 
       if (_a != null) {
-        _a.offset += webp.width * deltaY;
+        _a!.offset += webp.width * deltaY;
       }
     }
 
-    if (yStart < yEnd) {
+    if (yStart! < yEnd!) {
       _y.offset += _cropLeft;
       _u.offset += _cropLeft >> 1;
       _v.offset += _cropLeft >> 1;
       if (_a != null) {
-        _a.offset += _cropLeft;
+        _a!.offset += _cropLeft;
       }
 
-      _put(yStart - _cropTop, _cropRight - _cropLeft, yEnd - yStart);
+      _put(yStart - _cropTop!, _cropRight - _cropLeft, yEnd - yStart);
     }
 
     // rotate top samples if needed
     if (!isLastRow) {
-      _cacheY.memcpy(-ySize, ySize, yDst, 16 * _cacheYStride);
-      _cacheU.memcpy(-uvSize, uvSize, uDst, 8 * _cacheUVStride);
-      _cacheV.memcpy(-uvSize, uvSize, vDst, 8 * _cacheUVStride);
+      _cacheY.memcpy(-ySize, ySize, yDst, 16 * _cacheYStride!);
+      _cacheU.memcpy(-uvSize, uvSize, uDst, 8 * _cacheUVStride!);
+      _cacheV.memcpy(-uvSize, uvSize, vDst, 8 * _cacheUVStride!);
     }
 
     return true;
@@ -847,21 +853,20 @@ class VP8 {
   }
 
   int _clip8(int v) {
-    int d = ((v & XOR_YUV_MASK2) == 0) ? (v >> YUV_FIX2) : (v < 0) ? 0 : 255;
+    final d = ((v & XOR_YUV_MASK2) == 0)
+        ? (v >> YUV_FIX2)
+        : (v < 0)
+            ? 0
+            : 255;
     return d;
   }
 
-  int _yuvToR(int y, int v) {
-    return _clip8(kYScale * y + kVToR * v + kRCst);
-  }
+  int _yuvToR(int y, int v) => _clip8(kYScale * y + kVToR * v + kRCst);
 
-  int _yuvToG(int y, int u, int v) {
-    return _clip8(kYScale * y - kUToG * u - kVToG * v + kGCst);
-  }
+  int _yuvToG(int y, int u, int v) =>
+      _clip8(kYScale * y - kUToG * u - kVToG * v + kGCst);
 
-  int _yuvToB(int y, int u) {
-    return _clip8(kYScale * y + kUToB * u + kBCst);
-  }
+  int _yuvToB(int y, int u) => _clip8(kYScale * y + kUToB * u + kBCst);
 
   void _yuvToRgb(int y, int u, int v, InputBuffer rgb) {
     rgb[0] = _yuvToR(y, v);
@@ -876,38 +881,38 @@ class VP8 {
 
   void _upsample(
       InputBuffer topY,
-      InputBuffer bottomY,
+      InputBuffer? bottomY,
       InputBuffer topU,
       InputBuffer topV,
       InputBuffer curU,
       InputBuffer curV,
       InputBuffer topDst,
-      InputBuffer bottomDst,
+      InputBuffer? bottomDst,
       int len) {
     int LOAD_UV(int u, int v) => ((u) | ((v) << 16));
 
-    final int lastPixelPair = (len - 1) >> 1;
-    int tl_uv = LOAD_UV(topU[0], topV[0]); // top-left sample
-    int l_uv = LOAD_UV(curU[0], curV[0]); // left-sample
+    final lastPixelPair = (len - 1) >> 1;
+    var tl_uv = LOAD_UV(topU[0], topV[0]); // top-left sample
+    var l_uv = LOAD_UV(curU[0], curV[0]); // left-sample
 
-    final int uv0 = (3 * tl_uv + l_uv + 0x00020002) >> 2;
+    final uv0 = (3 * tl_uv + l_uv + 0x00020002) >> 2;
     _yuvToRgba(topY[0], uv0 & 0xff, (uv0 >> 16), topDst);
 
     if (bottomY != null) {
-      final int uv0 = (3 * l_uv + tl_uv + 0x00020002) >> 2;
-      _yuvToRgba(bottomY[0], uv0 & 0xff, (uv0 >> 16), bottomDst);
+      final uv0 = (3 * l_uv + tl_uv + 0x00020002) >> 2;
+      _yuvToRgba(bottomY[0], uv0 & 0xff, (uv0 >> 16), bottomDst!);
     }
 
-    for (int x = 1; x <= lastPixelPair; ++x) {
-      final int t_uv = LOAD_UV(topU[x], topV[x]); // top sample
-      final int uv = LOAD_UV(curU[x], curV[x]); // sample
+    for (var x = 1; x <= lastPixelPair; ++x) {
+      final t_uv = LOAD_UV(topU[x], topV[x]); // top sample
+      final uv = LOAD_UV(curU[x], curV[x]); // sample
       // precompute invariant values associated with first and second diagonals
-      final int avg = tl_uv + t_uv + l_uv + uv + 0x00080008;
-      final int diag_12 = (avg + 2 * (t_uv + l_uv)) >> 3;
-      final int diag_03 = (avg + 2 * (tl_uv + uv)) >> 3;
+      final avg = tl_uv + t_uv + l_uv + uv + 0x00080008;
+      final diag_12 = (avg + 2 * (t_uv + l_uv)) >> 3;
+      final diag_03 = (avg + 2 * (tl_uv + uv)) >> 3;
 
-      int uv0 = (diag_12 + tl_uv) >> 1;
-      int uv1 = (diag_03 + t_uv) >> 1;
+      var uv0 = (diag_12 + tl_uv) >> 1;
+      var uv1 = (diag_03 + t_uv) >> 1;
 
       _yuvToRgba(topY[2 * x - 1], uv0 & 0xff, (uv0 >> 16),
           InputBuffer.from(topDst, offset: (2 * x - 1) * 4));
@@ -920,7 +925,7 @@ class VP8 {
         uv1 = (diag_12 + uv) >> 1;
 
         _yuvToRgba(bottomY[2 * x - 1], uv0 & 0xff, (uv0 >> 16),
-            InputBuffer.from(bottomDst, offset: (2 * x - 1) * 4));
+            InputBuffer.from(bottomDst!, offset: (2 * x - 1) * 4));
 
         _yuvToRgba(bottomY[2 * x], uv1 & 0xff, (uv1 >> 16),
             InputBuffer.from(bottomDst, offset: (2 * x + 0) * 4));
@@ -931,14 +936,14 @@ class VP8 {
     }
 
     if ((len & 1) == 0) {
-      final int uv0 = (3 * tl_uv + l_uv + 0x00020002) >> 2;
+      final uv0 = (3 * tl_uv + l_uv + 0x00020002) >> 2;
       _yuvToRgba(topY[len - 1], uv0 & 0xff, (uv0 >> 16),
           InputBuffer.from(topDst, offset: (len - 1) * 4));
 
       if (bottomY != null) {
-        final int uv0 = (3 * l_uv + tl_uv + 0x00020002) >> 2;
+        final uv0 = (3 * l_uv + tl_uv + 0x00020002) >> 2;
         _yuvToRgba(bottomY[len - 1], uv0 & 0xff, (uv0 >> 16),
-            InputBuffer.from(bottomDst, offset: (len - 1) * 4));
+            InputBuffer.from(bottomDst!, offset: (len - 1) * 4));
       }
     }
   }
@@ -948,10 +953,10 @@ class VP8 {
       return;
     }
 
-    final int stride = webp.width * 4;
-    InputBuffer alpha = InputBuffer.from(_a);
-    int startY = mbY;
-    int numRows = mbH;
+    final stride = webp.width * 4;
+    final alpha = InputBuffer.from(_a!);
+    var startY = mbY;
+    var numRows = mbH;
 
     // Compensate for the 1-line delay of the fancy upscaler.
     // This is similar to EmitFancyRGB().
@@ -966,17 +971,16 @@ class VP8 {
       alpha.offset -= webp.width;
     }
 
-    InputBuffer dst =
-        InputBuffer(output.getBytes(), offset: startY * stride + 3);
+    final dst = InputBuffer(output!.getBytes(), offset: startY * stride + 3);
 
-    if (_cropTop + mbY + mbH == _cropBottom) {
+    if (_cropTop! + mbY + mbH == _cropBottom) {
       // If it's the very last call, we process all the remaining rows!
-      numRows = _cropBottom - _cropTop - startY;
+      numRows = _cropBottom! - _cropTop! - startY;
     }
 
-    for (int y = 0; y < numRows; ++y) {
-      for (int x = 0; x < mbW; ++x) {
-        final int alphaValue = alpha[x];
+    for (var y = 0; y < numRows; ++y) {
+      for (var x = 0; x < mbW; ++x) {
+        final alphaValue = alpha[x];
         dst[4 * x] = alphaValue & 0xff;
       }
 
@@ -986,18 +990,17 @@ class VP8 {
   }
 
   int _emitFancyRGB(int mbY, int mbW, int mbH) {
-    int numLinesOut = mbH; // a priori guess
-    InputBuffer dst =
-        InputBuffer(output.getBytes(), offset: mbY * webp.width * 4);
-    InputBuffer curY = InputBuffer.from(_y);
-    InputBuffer curU = InputBuffer.from(_u);
-    InputBuffer curV = InputBuffer.from(_v);
-    int y = mbY;
-    final int yEnd = mbY + mbH;
-    final int uvW = (mbW + 1) >> 1;
-    final int stride = webp.width * 4;
-    InputBuffer topU = InputBuffer.from(_tmpU);
-    InputBuffer topV = InputBuffer.from(_tmpV);
+    var numLinesOut = mbH; // a priori guess
+    final dst = InputBuffer(output!.getBytes(), offset: mbY * webp.width * 4);
+    final curY = InputBuffer.from(_y);
+    final curU = InputBuffer.from(_u);
+    final curV = InputBuffer.from(_v);
+    var y = mbY;
+    final yEnd = mbY + mbH;
+    final uvW = (mbW + 1) >> 1;
+    final stride = webp.width * 4;
+    final topU = InputBuffer.from(_tmpU);
+    final topV = InputBuffer.from(_tmpV);
 
     if (y == 0) {
       // First line is special cased. We mirror the u/v samples at boundary.
@@ -1015,17 +1018,17 @@ class VP8 {
     for (; y + 2 < yEnd; y += 2) {
       topU.offset = curU.offset;
       topV.offset = curV.offset;
-      curU.offset += _cacheUVStride;
-      curV.offset += _cacheUVStride;
+      curU.offset += _cacheUVStride!;
+      curV.offset += _cacheUVStride!;
       dst.offset += 2 * stride;
-      curY.offset += 2 * _cacheYStride;
-      _upsample(InputBuffer.from(curY, offset: -_cacheYStride), curY, topU,
+      curY.offset += 2 * _cacheYStride!;
+      _upsample(InputBuffer.from(curY, offset: -_cacheYStride!), curY, topU,
           topV, curU, curV, InputBuffer.from(dst, offset: -stride), dst, mbW);
     }
 
     // move to last row
-    curY.offset += _cacheYStride;
-    if (_cropTop + yEnd < _cropBottom) {
+    curY.offset += _cacheYStride!;
+    if (_cropTop! + yEnd < _cropBottom!) {
       // Save the unfinished samples for next call (as we're not done yet).
       _tmpY.memcpy(0, mbW, curY);
       _tmpU.memcpy(0, uvW, curU);
@@ -1044,9 +1047,9 @@ class VP8 {
     return numLinesOut;
   }
 
-  InputBuffer _decompressAlphaRows(int row, int numRows) {
-    final int width = webp.width;
-    final int height = webp.height;
+  InputBuffer? _decompressAlphaRows(int row, int numRows) {
+    final width = webp.width;
+    final height = webp.height;
 
     if (row < 0 || numRows <= 0 || row + numRows > height) {
       return null; // sanity check.
@@ -1054,7 +1057,7 @@ class VP8 {
 
     if (row == 0) {
       _alphaPlane = Uint8List(width * height);
-      _alpha = WebPAlpha(_alphaData, width, height);
+      _alpha = WebPAlpha(_alphaData!, width, height);
     }
 
     if (!_alpha.isAlphaDecoded) {
@@ -1067,19 +1070,19 @@ class VP8 {
     return InputBuffer(_alphaPlane, offset: row * width);
   }
 
-  bool _decodeMB(VP8BitReader tokenBr) {
-    VP8MB left = _mbInfo[0];
-    VP8MB mb = _mbInfo[1 + _mbX];
-    VP8MBData block = _mbData[_mbX];
+  bool _decodeMB(VP8BitReader? tokenBr) {
+    final left = _mbInfo[0];
+    final mb = _mbInfo[1 + _mbX];
+    final block = _mbData[_mbX];
     bool skip;
 
     // Note: we don't save segment map (yet), as we don't expect
     // to decode more than 1 keyframe.
     if (_segmentHeader.updateMap) {
       // Hardcoded tree parsing
-      _segment = br.getBit(_proba.segments[0]) == 0
-          ? br.getBit(_proba.segments[1])
-          : 2 + br.getBit(_proba.segments[2]);
+      _segment = br.getBit(_proba!.segments[0]) == 0
+          ? br.getBit(_proba!.segments[1])
+          : 2 + br.getBit(_proba!.segments[2]);
     }
 
     skip = _useSkipProba ? br.getBit(_skipP) != 0 : false;
@@ -1097,28 +1100,28 @@ class VP8 {
       block.nonZeroUV = 0;
     }
 
-    if (_filterType > 0) {
+    if (_filterType! > 0) {
       // store filter info
       _fInfo[_mbX] = _fStrengths[_segment][block.isIntra4x4 ? 1 : 0];
-      VP8FInfo finfo = _fInfo[_mbX];
+      final finfo = _fInfo[_mbX]!;
       finfo.fInner = finfo.fInner || !skip;
     }
 
     return true;
   }
 
-  bool _parseResiduals(VP8MB mb, VP8BitReader tokenBr) {
-    var bands = _proba.bands;
+  bool _parseResiduals(VP8MB mb, VP8BitReader? tokenBr) {
+    final bands = _proba!.bands;
     List<VP8BandProbas> acProba;
-    VP8QuantMatrix q = _dqm[_segment];
-    VP8MBData block = _mbData[_mbX];
-    InputBuffer dst = InputBuffer(block.coeffs);
+    final q = _dqm[_segment];
+    final block = _mbData[_mbX];
+    final dst = InputBuffer(block.coeffs);
     //int di = 0;
-    VP8MB leftMb = _mbInfo[0];
+    final leftMb = _mbInfo[0];
     int tnz;
     int lnz;
-    int nonZeroY = 0;
-    int nonZeroUV = 0;
+    var nonZeroY = 0;
+    var nonZeroUV = 0;
     int outTopNz;
     int outLeftNz;
     int first;
@@ -1127,17 +1130,17 @@ class VP8 {
 
     if (!block.isIntra4x4) {
       // parse DC
-      InputBuffer dc = InputBuffer(Int16List(16));
-      final int ctx = mb.nzDc + leftMb.nzDc;
-      final int nz = _getCoeffs(tokenBr, bands[1], ctx, q.y2Mat, 0, dc);
+      final dc = InputBuffer(Int16List(16));
+      final ctx = mb.nzDc + leftMb.nzDc;
+      final nz = _getCoeffs(tokenBr, bands[1], ctx, q!.y2Mat, 0, dc);
       mb.nzDc = leftMb.nzDc = (nz > 0) ? 1 : 0;
       if (nz > 1) {
         // more than just the DC -> perform the full transform
         _transformWHT(dc, dst);
       } else {
         // only DC is non-zero -> inlined simplified transform
-        final int dc0 = (dc[0] + 3) >> 3;
-        for (int i = 0; i < 16 * 16; i += 16) {
+        final dc0 = (dc[0] + 3) >> 3;
+        for (var i = 0; i < 16 * 16; i += 16) {
           dst[i] = dc0;
         }
       }
@@ -1151,12 +1154,12 @@ class VP8 {
 
     tnz = mb.nz & 0x0f;
     lnz = leftMb.nz & 0x0f;
-    for (int y = 0; y < 4; ++y) {
-      int l = lnz & 1;
-      int nzCoeffs = 0;
-      for (int x = 0; x < 4; ++x) {
-        final int ctx = l + (tnz & 1);
-        final int nz = _getCoeffs(tokenBr, acProba, ctx, q.y1Mat, first, dst);
+    for (var y = 0; y < 4; ++y) {
+      var l = lnz & 1;
+      var nzCoeffs = 0;
+      for (var x = 0; x < 4; ++x) {
+        final ctx = l + (tnz & 1);
+        final nz = _getCoeffs(tokenBr, acProba, ctx, q!.y1Mat, first, dst);
         l = (nz > first) ? 1 : 0;
         tnz = (tnz >> 1) | (l << 7);
         nzCoeffs = _nzCodeBits(nzCoeffs, nz, dst[0] != 0 ? 1 : 0);
@@ -1170,15 +1173,15 @@ class VP8 {
     outTopNz = tnz;
     outLeftNz = lnz >> 4;
 
-    for (int ch = 0; ch < 4; ch += 2) {
-      int nzCoeffs = 0;
+    for (var ch = 0; ch < 4; ch += 2) {
+      var nzCoeffs = 0;
       tnz = mb.nz >> (4 + ch);
       lnz = leftMb.nz >> (4 + ch);
-      for (int y = 0; y < 2; ++y) {
-        int l = lnz & 1;
-        for (int x = 0; x < 2; ++x) {
-          final int ctx = l + (tnz & 1);
-          final int nz = _getCoeffs(tokenBr, bands[2], ctx, q.uvMat, 0, dst);
+      for (var y = 0; y < 2; ++y) {
+        var l = lnz & 1;
+        for (var x = 0; x < 2; ++x) {
+          final ctx = l + (tnz & 1);
+          final nz = _getCoeffs(tokenBr, bands[2], ctx, q!.uvMat, 0, dst);
           l = (nz > 0) ? 1 : 0;
           tnz = (tnz >> 1) | (l << 3);
           nzCoeffs = _nzCodeBits(nzCoeffs, nz, dst[0] != 0 ? 1 : 0);
@@ -1204,33 +1207,33 @@ class VP8 {
     // We look at the mode-code of each block and check if some blocks have less
     // than three non-zero coeffs (code < 2). This is to avoid dithering flat and
     // empty blocks.
-    block.dither = (nonZeroUV & 0xaaaa) != 0 ? 0 : q.dither;
+    block.dither = (nonZeroUV & 0xaaaa) != 0 ? 0 : q!.dither;
 
     // will be used for further optimization
     return (nonZeroY | nonZeroUV) == 0;
   }
 
   void _transformWHT(InputBuffer src, InputBuffer out) {
-    Int32List tmp = Int32List(16);
+    final tmp = Int32List(16);
 
-    int oi = 0;
-    for (int i = 0; i < 4; ++i) {
-      final int a0 = src[0 + i] + src[12 + i];
-      final int a1 = src[4 + i] + src[8 + i];
-      final int a2 = src[4 + i] - src[8 + i];
-      final int a3 = src[0 + i] - src[12 + i];
+    var oi = 0;
+    for (var i = 0; i < 4; ++i) {
+      final a0 = src[0 + i] + src[12 + i];
+      final a1 = src[4 + i] + src[8 + i];
+      final a2 = src[4 + i] - src[8 + i];
+      final a3 = src[0 + i] - src[12 + i];
       tmp[0 + i] = a0 + a1;
       tmp[8 + i] = a0 - a1;
       tmp[4 + i] = a3 + a2;
       tmp[12 + i] = a3 - a2;
     }
 
-    for (int i = 0; i < 4; ++i) {
-      final int dc = tmp[0 + i * 4] + 3; // w/ rounder
-      final int a0 = dc + tmp[3 + i * 4];
-      final int a1 = tmp[1 + i * 4] + tmp[2 + i * 4];
-      final int a2 = tmp[1 + i * 4] - tmp[2 + i * 4];
-      final int a3 = dc - tmp[3 + i * 4];
+    for (var i = 0; i < 4; ++i) {
+      final dc = tmp[0 + i * 4] + 3; // w/ rounder
+      final a0 = dc + tmp[3 + i * 4];
+      final a1 = tmp[1 + i * 4] + tmp[2 + i * 4];
+      final a2 = tmp[1 + i * 4] - tmp[2 + i * 4];
+      final a3 = dc - tmp[3 + i * 4];
       out[oi + 0] = (a0 + a1) >> 3;
       out[oi + 16] = (a3 + a2) >> 3;
       out[oi + 32] = (a0 - a1) >> 3;
@@ -1242,7 +1245,11 @@ class VP8 {
 
   int _nzCodeBits(int nz_coeffs, int nz, int dc_nz) {
     nz_coeffs <<= 2;
-    nz_coeffs |= (nz > 3) ? 3 : (nz > 1) ? 2 : dc_nz;
+    nz_coeffs |= (nz > 3)
+        ? 3
+        : (nz > 1)
+            ? 2
+            : dc_nz;
     return nz_coeffs;
   }
 
@@ -1320,12 +1327,12 @@ class VP8 {
           v += br.getBit(145);
         }
       } else {
-        final int bit1 = br.getBit(p[8]);
-        final int bit0 = br.getBit(p[9 + bit1]);
-        final int cat = 2 * bit1 + bit0;
+        final bit1 = br.getBit(p[8]);
+        final bit0 = br.getBit(p[9 + bit1]);
+        final cat = 2 * bit1 + bit0;
         v = 0;
-        List<int> tab = kCat3456[cat];
-        for (int i = 0, len = tab.length; i < len; ++i) {
+        final tab = kCat3456[cat];
+        for (var i = 0, len = tab.length; i < len; ++i) {
           v += v + br.getBit(tab[i]);
         }
         v += 3 + (8 << cat);
@@ -1335,12 +1342,12 @@ class VP8 {
   }
 
   // Returns the position of the last non-zero coeff plus one
-  int _getCoeffs(VP8BitReader br, List<VP8BandProbas> prob, int ctx,
+  int _getCoeffs(VP8BitReader? br, List<VP8BandProbas> prob, int ctx,
       List<int> dq, int n, InputBuffer out) {
     // n is either 0 or 1 here. kBands[n] is not necessary for extracting '*p'.
     List<int> p = prob[n].probas[ctx];
     for (; n < 16; ++n) {
-      if (br.getBit(p[0]) == 0) {
+      if (br!.getBit(p[0]) == 0) {
         return n; // previous coeff was last non-zero coeff
       }
 
@@ -1354,7 +1361,7 @@ class VP8 {
 
       {
         // non zero coeff
-        List<Uint8List> p_ctx = prob[kBands[n + 1]].probas;
+        final p_ctx = prob[kBands[n + 1]].probas;
         int v;
         if (br.getBit(p[2]) == 0) {
           v = 1;
@@ -1371,35 +1378,35 @@ class VP8 {
   }
 
   void _parseIntraMode() {
-    int ti = 4 * _mbX;
-    int li = 0;
-    Uint8List top = _intraT;
-    Uint8List left = _intraL;
+    final ti = 4 * _mbX;
+    const li = 0;
+    final top = _intraT;
+    final left = _intraL;
 
-    VP8MBData block = _mbData[_mbX];
+    final block = _mbData[_mbX];
 
     // decide for B_PRED first
     block.isIntra4x4 = br.getBit(145) == 0;
     if (!block.isIntra4x4) {
       // Hardcoded 16x16 intra-mode decision tree.
-      final int ymode = br.getBit(156) != 0
+      final ymode = br.getBit(156) != 0
           ? (br.getBit(128) != 0 ? TM_PRED : H_PRED)
           : (br.getBit(163) != 0 ? V_PRED : DC_PRED);
       block.imodes[0] = ymode;
 
-      top.fillRange(ti, ti + 4, ymode);
+      top!.fillRange(ti, ti + 4, ymode);
       left.fillRange(li, li + 4, ymode);
     } else {
-      Uint8List modes = block.imodes;
-      int mi = 0;
-      for (int y = 0; y < 4; ++y) {
-        int ymode = left[y];
-        for (int x = 0; x < 4; ++x) {
-          List<int> prob = kBModesProba[top[ti + x]][ymode];
+      final modes = block.imodes;
+      var mi = 0;
+      for (var y = 0; y < 4; ++y) {
+        var ymode = left[y];
+        for (var x = 0; x < 4; ++x) {
+          final prob = kBModesProba[top![ti + x]][ymode];
 
           // Generic tree-parsing
-          int b = br.getBit(prob[0]);
-          int i = kYModesIntra4[b];
+          final b = br.getBit(prob[0]);
+          var i = kYModesIntra4[b];
 
           while (i > 0) {
             i = kYModesIntra4[2 * i + br.getBit(prob[i])];
@@ -1409,7 +1416,7 @@ class VP8 {
           top[ti + x] = ymode;
         }
 
-        modes.setRange(mi, mi + 4, top, ti);
+        modes.setRange(mi, mi + 4, top!, ti);
 
         mi += 4;
         left[y] = ymode;
@@ -1419,93 +1426,97 @@ class VP8 {
     // Hardcoded UVMode decision tree
     block.uvmode = br.getBit(142) == 0
         ? DC_PRED
-        : br.getBit(114) == 0 ? V_PRED : br.getBit(183) != 0 ? TM_PRED : H_PRED;
+        : br.getBit(114) == 0
+            ? V_PRED
+            : br.getBit(183) != 0
+                ? TM_PRED
+                : H_PRED;
   }
 
   // Main data source
-  VP8BitReader br;
+  late VP8BitReader br;
 
-  Image output;
+  Image? output;
 
-  VP8Filter _dsp;
+  late VP8Filter _dsp;
 
   // headers
-  VP8FrameHeader _frameHeader = VP8FrameHeader();
-  VP8PictureHeader _picHeader = VP8PictureHeader();
-  VP8FilterHeader _filterHeader = VP8FilterHeader();
-  VP8SegmentHeader _segmentHeader = VP8SegmentHeader();
+  final _frameHeader = VP8FrameHeader();
+  final _picHeader = VP8PictureHeader();
+  final _filterHeader = VP8FilterHeader();
+  final _segmentHeader = VP8SegmentHeader();
 
-  int _cropLeft;
-  int _cropRight;
-  int _cropTop;
-  int _cropBottom;
+  late int _cropLeft;
+  late int _cropRight;
+  int? _cropTop;
+  int? _cropBottom;
 
   // Width in macroblock units.
-  int _mbWidth;
+  int? _mbWidth;
 
   // Height in macroblock units.
-  int _mbHeight;
+  int? _mbHeight;
 
   // Macroblock to process/filter, depending on cropping and filter_type.
-  int _tlMbX; // top-left MB that must be in-loop filtered
-  int _tlMbY;
-  int _brMbX; // last bottom-right MB that must be decoded
-  int _brMbY;
+  late int _tlMbX; // top-left MB that must be in-loop filtered
+  late int _tlMbY;
+  int? _brMbX; // last bottom-right MB that must be decoded
+  int? _brMbY;
 
   // number of partitions.
-  int _numPartitions;
+  late int _numPartitions;
   // per-partition boolean decoders.
-  List<VP8BitReader> _partitions = List<VP8BitReader>(MAX_NUM_PARTITIONS);
+  final _partitions = List<VP8BitReader?>.filled(MAX_NUM_PARTITIONS, null);
 
   // Dithering strength, deduced from decoding options
-  bool _dither = false; // whether to use dithering or not
+  final _dither = false; // whether to use dithering or not
   //VP8Random _ditheringRand; // random generator for dithering
 
   // dequantization (one set of DC/AC dequant factor per segment)
-  List<VP8QuantMatrix> _dqm = List<VP8QuantMatrix>(NUM_MB_SEGMENTS);
+  final _dqm = List<VP8QuantMatrix?>.filled(NUM_MB_SEGMENTS, null);
 
   // probabilities
-  VP8Proba _proba;
-  bool _useSkipProba;
-  int _skipP;
+  VP8Proba? _proba;
+  late bool _useSkipProba;
+  late int _skipP;
 
   // Boundary data cache and persistent buffers.
   // top intra modes values: 4 * _mbWidth
-  Uint8List _intraT;
+  Uint8List? _intraT;
 
   // left intra modes values
-  Uint8List _intraL = Uint8List(4);
+  final _intraL = Uint8List(4);
 
   // uint8, segment of the currently parsed block
-  int _segment;
+  late int _segment;
 
   // top y/u/v samples
-  List<VP8TopSamples> _yuvT;
+  late List<VP8TopSamples> _yuvT;
 
   // contextual macroblock info (mb_w_ + 1)
-  List<VP8MB> _mbInfo;
+  late List<VP8MB> _mbInfo;
 
   // filter strength info
-  List<VP8FInfo> _fInfo;
+  late List<VP8FInfo?> _fInfo;
 
   // main block for Y/U/V (size = YUV_SIZE)
-  Uint8List _yuvBlock;
+  late Uint8List _yuvBlock;
 
   // macroblock row for storing unfiltered samples
-  InputBuffer _cacheY;
-  InputBuffer _cacheU;
-  InputBuffer _cacheV;
-  int _cacheYStride;
-  int _cacheUVStride;
+  late InputBuffer _cacheY;
+  late InputBuffer _cacheU;
+  late InputBuffer _cacheV;
+  int? _cacheYStride;
+  int? _cacheUVStride;
 
-  InputBuffer _tmpY;
-  InputBuffer _tmpU;
-  InputBuffer _tmpV;
+  late InputBuffer _tmpY;
+  late InputBuffer _tmpU;
+  late InputBuffer _tmpV;
 
-  InputBuffer _y;
-  InputBuffer _u;
-  InputBuffer _v;
-  InputBuffer _a;
+  late InputBuffer _y;
+  late InputBuffer _u;
+  late InputBuffer _v;
+  InputBuffer? _a;
 
   // main memory chunk for the above data. Persistent.
   //Uint8List _mem;
@@ -1516,34 +1527,36 @@ class VP8 {
   int _mbY = 0;
 
   // parsed reconstruction data
-  List<VP8MBData> _mbData;
+  late List<VP8MBData> _mbData;
 
   // 0=off, 1=simple, 2=complex
-  int _filterType;
+  int? _filterType;
 
   // precalculated per-segment/type
-  List<List<VP8FInfo>> _fStrengths;
+  late List<List<VP8FInfo>> _fStrengths;
 
   // Alpha
   // alpha-plane decoder object
-  WebPAlpha _alpha;
+  late WebPAlpha _alpha;
 
   // compressed alpha data (if present)
-  InputBuffer _alphaData;
+  InputBuffer? _alphaData;
 
   // true if alpha_data_ is decoded in alpha_plane_
   //int _isAlphaDecoded;
   // output. Persistent, contains the whole data.
-  Uint8List _alphaPlane;
+  late Uint8List _alphaPlane;
 
   // extensions
   //int _layerColorspace;
   // compressed layer data (if present)
   //Uint8List _layerData;
 
-  static int _clip(int v, int M) {
-    return v < 0 ? 0 : v > M ? M : v;
-  }
+  static int _clip(int v, int M) => v < 0
+      ? 0
+      : v > M
+          ? M
+          : v;
 
   static const kYModesIntra4 = [
     -B_DC_PRED,
@@ -2079,70 +2092,69 @@ class VP8 {
   //               U/V, so it's 8 samples total (because of the 2x upsampling).
   static const FILTER_EXTRA_ROWS = [0, 2, 8];
 
-  static const int VP8_SIGNATURE = 0x2a019d;
+  static const VP8_SIGNATURE = 0x2a019d;
 
-  static const int MB_FEATURE_TREE_PROBS = 3;
-  static const int NUM_MB_SEGMENTS = 4;
-  static const int NUM_REF_LF_DELTAS = 4;
-  static const int NUM_MODE_LF_DELTAS = 4; // I4x4, ZERO, *, SPLIT
-  static const int MAX_NUM_PARTITIONS = 8;
+  static const MB_FEATURE_TREE_PROBS = 3;
+  static const NUM_MB_SEGMENTS = 4;
+  static const NUM_REF_LF_DELTAS = 4;
+  static const NUM_MODE_LF_DELTAS = 4; // I4x4, ZERO, *, SPLIT
+  static const MAX_NUM_PARTITIONS = 8;
 
-  static const int B_DC_PRED = 0; // 4x4 modes
-  static const int B_TM_PRED = 1;
-  static const int B_VE_PRED = 2;
-  static const int B_HE_PRED = 3;
-  static const int B_RD_PRED = 4;
-  static const int B_VR_PRED = 5;
-  static const int B_LD_PRED = 6;
-  static const int B_VL_PRED = 7;
-  static const int B_HD_PRED = 8;
-  static const int B_HU_PRED = 9;
-  static const int NUM_BMODES = B_HU_PRED + 1 - B_DC_PRED;
+  static const B_DC_PRED = 0; // 4x4 modes
+  static const B_TM_PRED = 1;
+  static const B_VE_PRED = 2;
+  static const B_HE_PRED = 3;
+  static const B_RD_PRED = 4;
+  static const B_VR_PRED = 5;
+  static const B_LD_PRED = 6;
+  static const B_VL_PRED = 7;
+  static const B_HD_PRED = 8;
+  static const B_HU_PRED = 9;
+  static const NUM_BMODES = B_HU_PRED + 1 - B_DC_PRED;
 
   // Luma16 or UV modes
-  static const int DC_PRED = B_DC_PRED;
-  static const int V_PRED = B_VE_PRED;
-  static const int H_PRED = B_HE_PRED;
-  static const int TM_PRED = B_TM_PRED;
-  static const int B_PRED = NUM_BMODES;
+  static const DC_PRED = B_DC_PRED;
+  static const V_PRED = B_VE_PRED;
+  static const H_PRED = B_HE_PRED;
+  static const TM_PRED = B_TM_PRED;
+  static const B_PRED = NUM_BMODES;
 
   // special modes
-  static const int B_DC_PRED_NOTOP = 4;
-  static const int B_DC_PRED_NOLEFT = 5;
-  static const int B_DC_PRED_NOTOPLEFT = 6;
-  static const int NUM_B_DC_MODES = 7;
+  static const B_DC_PRED_NOTOP = 4;
+  static const B_DC_PRED_NOLEFT = 5;
+  static const B_DC_PRED_NOTOPLEFT = 6;
+  static const NUM_B_DC_MODES = 7;
 
   // Probabilities
-  static const int NUM_TYPES = 4;
-  static const int NUM_BANDS = 8;
-  static const int NUM_CTX = 3;
-  static const int NUM_PROBAS = 11;
+  static const NUM_TYPES = 4;
+  static const NUM_BANDS = 8;
+  static const NUM_CTX = 3;
+  static const NUM_PROBAS = 11;
 
-  static const int BPS = 32; // this is the common stride used by yuv[]
-  static const int YUV_SIZE = (BPS * 17 + BPS * 9);
-  static const int Y_SIZE = (BPS * 17);
-  static const int Y_OFF = (BPS * 1 + 8);
-  static const int U_OFF = (Y_OFF + BPS * 16 + BPS);
-  static const int V_OFF = (U_OFF + 16);
+  static const BPS = 32; // this is the common stride used by yuv[]
+  static const YUV_SIZE = (BPS * 17 + BPS * 9);
+  static const Y_SIZE = (BPS * 17);
+  static const Y_OFF = (BPS * 1 + 8);
+  static const U_OFF = (Y_OFF + BPS * 16 + BPS);
+  static const V_OFF = (U_OFF + 16);
 
-  static const int YUV_FIX = 16; // fixed-point precision for RGB->YUV
-  static const int YUV_HALF = 1 << (YUV_FIX - 1);
-  static const int YUV_MASK = (256 << YUV_FIX) - 1;
-  static const int YUV_RANGE_MIN = -227; // min value of r/g/b output
-  static const int YUV_RANGE_MAX = 256 + 226; // max value of r/g/b output
-  static const int YUV_FIX2 = 14; // fixed-point precision for YUV->RGB
-  static const int YUV_HALF2 = 1 << (YUV_FIX2 - 1);
-  static const int YUV_MASK2 = (256 << YUV_FIX2) - 1;
-  static const int XOR_YUV_MASK2 = (-YUV_MASK2 - 1);
+  static const YUV_FIX = 16; // fixed-point precision for RGB->YUV
+  static const YUV_HALF = 1 << (YUV_FIX - 1);
+  static const YUV_MASK = (256 << YUV_FIX) - 1;
+  static const YUV_RANGE_MIN = -227; // min value of r/g/b output
+  static const YUV_RANGE_MAX = 256 + 226; // max value of r/g/b output
+  static const YUV_FIX2 = 14; // fixed-point precision for YUV->RGB
+  static const YUV_HALF2 = 1 << (YUV_FIX2 - 1);
+  static const YUV_MASK2 = (256 << YUV_FIX2) - 1;
+  static const XOR_YUV_MASK2 = (-YUV_MASK2 - 1);
 
   // These constants are 14b fixed-point version of ITU-R BT.601 constants.
-  static const int kYScale = 19077; // 1.164 = 255 / 219
-  static const int kVToR = 26149; // 1.596 = 255 / 112 * 0.701
-  static const int kUToG = 6419; // 0.391 = 255 / 112 * 0.886 * 0.114 / 0.587
-  static const int kVToG = 13320; // 0.813 = 255 / 112 * 0.701 * 0.299 / 0.587
-  static const int kUToB = 33050; // 2.018 = 255 / 112 * 0.886
-  static const int kRCst = (-kYScale * 16 - kVToR * 128 + YUV_HALF2);
-  static const int kGCst =
-      (-kYScale * 16 + kUToG * 128 + kVToG * 128 + YUV_HALF2);
-  static const int kBCst = (-kYScale * 16 - kUToB * 128 + YUV_HALF2);
+  static const kYScale = 19077; // 1.164 = 255 / 219
+  static const kVToR = 26149; // 1.596 = 255 / 112 * 0.701
+  static const kUToG = 6419; // 0.391 = 255 / 112 * 0.886 * 0.114 / 0.587
+  static const kVToG = 13320; // 0.813 = 255 / 112 * 0.701 * 0.299 / 0.587
+  static const kUToB = 33050; // 2.018 = 255 / 112 * 0.886
+  static const kRCst = (-kYScale * 16 - kVToR * 128 + YUV_HALF2);
+  static const kGCst = (-kYScale * 16 + kUToG * 128 + kVToG * 128 + YUV_HALF2);
+  static const kBCst = (-kYScale * 16 - kUToB * 128 + YUV_HALF2);
 }

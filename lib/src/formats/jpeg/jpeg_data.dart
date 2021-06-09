@@ -1,45 +1,57 @@
 import 'dart:typed_data';
 
 import '../../exif_data.dart';
+import '../../image.dart';
 import '../../image_exception.dart';
-import '../../internal/bit_operators.dart';
 import '../../util/input_buffer.dart';
+import '_component_data.dart';
 import 'jpeg.dart';
 import 'jpeg_adobe.dart';
 import 'jpeg_component.dart';
 import 'jpeg_frame.dart';
 import 'jpeg_info.dart';
 import 'jpeg_jfif.dart';
+import 'jpeg_quantize_stub.dart'
+    if (dart.library.io) '_jpeg_quantize_io.dart'
+    if (dart.library.js) '_jpeg_quantize_html.dart';
 import 'jpeg_scan.dart';
 
 class JpegData {
-  InputBuffer input;
-  JpegJfif jfif;
-  JpegAdobe adobe;
-  JpegFrame frame;
-  int resetInterval;
+  late InputBuffer input;
+  late JpegJfif jfif;
+  JpegAdobe? adobe;
+  JpegFrame? frame;
+  int? resetInterval;
+  String? comment;
   final exif = ExifData();
-  final quantizationTables = List<Int16List>(Jpeg.NUM_QUANT_TBLS);
-  final frames = List<JpegFrame>();
-  final huffmanTablesAC = List<dynamic>();
-  final huffmanTablesDC = List<dynamic>();
-  final components = List<_ComponentData>();
+  final quantizationTables = List<Int16List?>.filled(Jpeg.NUM_QUANT_TBLS, null);
+  final frames = <JpegFrame?>[];
+  final huffmanTablesAC = <List?>[];
+  final huffmanTablesDC = <List?>[];
+  final components = <ComponentData>[];
 
   bool validate(List<int> bytes) {
     input = InputBuffer(bytes, bigEndian: true);
 
-    int marker = _nextMarker();
+    var marker = _nextMarker();
     if (marker != Jpeg.M_SOI) {
       return false;
     }
 
-    bool hasSOF = false;
-    bool hasSOS = false;
+    var hasSOF = false;
+    var hasSOS = false;
 
     marker = _nextMarker();
     while (marker != Jpeg.M_EOI && !input.isEOS) {
       // EOI (End of image)
-      _skipBlock();
+      final sectionByteSize = input.readUint16();
+      if (sectionByteSize < 2) {
+        // jpeg section consists of more than 2 bytes at least
+        // return success only when SOF and SOS have already found (as a jpeg without EOF.)
+        break;
+      }
+      input.offset += sectionByteSize - 2;
+
       switch (marker) {
         case Jpeg.M_SOF0: // SOF0 (Start of Frame, Baseline DCT)
         case Jpeg.M_SOF1: // SOF1 (Start of Frame, Extended DCT)
@@ -58,18 +70,18 @@ class JpegData {
     return hasSOF && hasSOS;
   }
 
-  JpegInfo readInfo(List<int> bytes) {
+  JpegInfo? readInfo(List<int> bytes) {
     input = InputBuffer(bytes, bigEndian: true);
 
-    int marker = _nextMarker();
+    var marker = _nextMarker();
     if (marker != Jpeg.M_SOI) {
       return null;
     }
 
-    JpegInfo info = JpegInfo();
+    final info = JpegInfo();
 
-    bool hasSOF = false;
-    bool hasSOS = false;
+    var hasSOF = false;
+    var hasSOS = false;
 
     marker = _nextMarker();
     while (marker != Jpeg.M_EOI && !input.isEOS) {
@@ -94,8 +106,8 @@ class JpegData {
     }
 
     if (frame != null) {
-      info.width = frame.samplesPerLine;
-      info.height = frame.scanLines;
+      info.width = frame!.samplesPerLine!;
+      info.height = frame!.scanLines!;
     }
     frame = null;
     frames.clear();
@@ -105,221 +117,31 @@ class JpegData {
 
   void read(List<int> bytes) {
     input = InputBuffer(bytes, bigEndian: true);
-
     _read();
 
     if (frames.length != 1) {
       throw ImageException('Only single frame JPEGs supported');
     }
 
-    for (int i = 0; i < frame.componentsOrder.length; ++i) {
-      /*JpegComponent component =*/ frame.components[frame.componentsOrder[i]];
-    }
-
-    for (int i = 0; i < frame.componentsOrder.length; ++i) {
-      JpegComponent component = frame.components[frame.componentsOrder[i]];
-      components.add(_ComponentData(
+    for (var i = 0; i < frame!.componentsOrder.length; ++i) {
+      final component = frame!.components[frame!.componentsOrder[i]]!;
+      components.add(ComponentData(
           component.hSamples,
-          frame.maxHSamples,
+          frame!.maxHSamples,
           component.vSamples,
-          frame.maxVSamples,
+          frame!.maxVSamples,
           _buildComponentData(frame, component)));
     }
   }
 
-  int get width => frame.samplesPerLine;
+  int? get width => frame!.samplesPerLine;
 
-  int get height => frame.scanLines;
+  int? get height => frame!.scanLines;
 
-  Uint8List getData(int width, int height) {
-    _ComponentData component1;
-    _ComponentData component2;
-    _ComponentData component3;
-    _ComponentData component4;
-    Uint8List component1Line;
-    Uint8List component2Line;
-    Uint8List component3Line;
-    Uint8List component4Line;
-    int offset = 0;
-    int Y, Cb, Cr, K, C, M, Ye, R, G, B;
-    bool colorTransform = false;
-    int dataLength = width * height * components.length;
-    Uint8List data = Uint8List(dataLength);
-
-    switch (components.length) {
-      case 1:
-        component1 = components[0];
-        var lines = component1.lines;
-        int hShift1 = component1.hScaleShift;
-        int vShift1 = component1.vScaleShift;
-        for (int y = 0; y < height; y++) {
-          int y1 = y >> vShift1;
-          component1Line = lines[y1];
-          for (int x = 0; x < width; x++) {
-            int x1 = x >> hShift1;
-            Y = component1Line[x1];
-            data[offset++] = Y;
-          }
-        }
-        break;
-      case 2:
-        // PDF might compress two component data in custom color-space
-        component1 = components[0];
-        component2 = components[1];
-        int hShift1 = component1.hScaleShift;
-        int vShift1 = component1.vScaleShift;
-        int hShift2 = component2.hScaleShift;
-        int vShift2 = component2.vScaleShift;
-
-        for (int y = 0; y < height; y++) {
-          int y1 = y >> vShift1;
-          int y2 = y >> vShift2;
-          component1Line = component1.lines[y1];
-          component2Line = component2.lines[y2];
-
-          for (int x = 0; x < width; x++) {
-            int x1 = x >> hShift1;
-            int x2 = x >> hShift2;
-
-            Y = component1Line[x1];
-            data[offset++] = Y;
-
-            Y = component2Line[x2];
-            data[offset++] = Y;
-          }
-        }
-        break;
-      case 3:
-        // The default transform for three components is true
-        colorTransform = true;
-
-        component1 = components[0];
-        component2 = components[1];
-        component3 = components[2];
-
-        var lines1 = component1.lines;
-        var lines2 = component2.lines;
-        var lines3 = component3.lines;
-
-        int hShift1 = component1.hScaleShift;
-        int vShift1 = component1.vScaleShift;
-        int hShift2 = component2.hScaleShift;
-        int vShift2 = component2.vScaleShift;
-        int hShift3 = component3.hScaleShift;
-        int vShift3 = component3.vScaleShift;
-
-        for (int y = 0; y < height; y++) {
-          int y1 = y >> vShift1;
-          int y2 = y >> vShift2;
-          int y3 = y >> vShift3;
-
-          component1Line = lines1[y1];
-          component2Line = lines2[y2];
-          component3Line = lines3[y3];
-
-          for (int x = 0; x < width; x++) {
-            int x1 = x >> hShift1;
-            int x2 = x >> hShift2;
-            int x3 = x >> hShift3;
-
-            if (!colorTransform) {
-              data[offset++] = component1Line[x1];
-              data[offset++] = component2Line[x2];
-              data[offset++] = component3Line[x3];
-            } else {
-              Y = component1Line[x1] << 8;
-              Cb = component2Line[x2] - 128;
-              Cr = component3Line[x3] - 128;
-
-              R = shiftR((Y + 359 * Cr + 128), 8);
-              G = shiftR((Y - 88 * Cb - 183 * Cr + 128), 8);
-              B = shiftR((Y + 454 * Cb + 128), 8);
-
-              data[offset++] = _clamp8(R);
-              data[offset++] = _clamp8(G);
-              data[offset++] = _clamp8(B);
-            }
-          }
-        }
-        break;
-      case 4:
-        if (adobe == null) {
-          throw ImageException('Unsupported color mode (4 components)');
-        }
-        // The default transform for four components is false
-        colorTransform = false;
-        // The adobe transform marker overrides any previous setting
-        if (adobe.transformCode != 0) {
-          colorTransform = true;
-        }
-
-        component1 = components[0];
-        component2 = components[1];
-        component3 = components[2];
-        component4 = components[3];
-
-        var lines1 = component1.lines;
-        var lines2 = component2.lines;
-        var lines3 = component3.lines;
-        var lines4 = component4.lines;
-
-        int hShift1 = component1.hScaleShift;
-        int vShift1 = component1.vScaleShift;
-        int hShift2 = component2.hScaleShift;
-        int vShift2 = component2.vScaleShift;
-        int hShift3 = component3.hScaleShift;
-        int vShift3 = component3.vScaleShift;
-        int hShift4 = component4.hScaleShift;
-        int vShift4 = component4.vScaleShift;
-
-        for (int y = 0; y < height; y++) {
-          int y1 = y >> vShift1;
-          int y2 = y >> vShift2;
-          int y3 = y >> vShift3;
-          int y4 = y >> vShift4;
-          component1Line = lines1[y1];
-          component2Line = lines2[y2];
-          component3Line = lines3[y3];
-          component4Line = lines4[y4];
-          for (int x = 0; x < width; x++) {
-            int x1 = x >> hShift1;
-            int x2 = x >> hShift2;
-            int x3 = x >> hShift3;
-            int x4 = x >> hShift4;
-            if (!colorTransform) {
-              C = component1Line[x1];
-              M = component2Line[x2];
-              Ye = component3Line[x3];
-              K = component4Line[x4];
-            } else {
-              Y = component1Line[x1];
-              Cb = component2Line[x2];
-              Cr = component3Line[x3];
-              K = component4Line[x4];
-
-              C = 255 - _clamp8((Y + 1.402 * (Cr - 128)).toInt());
-              M = 255 -
-                  _clamp8((Y - 0.3441363 * (Cb - 128) - 0.71413636 * (Cr - 128))
-                      .toInt());
-              Ye = 255 - _clamp8((Y + 1.772 * (Cb - 128)).toInt());
-            }
-
-            data[offset++] = C;
-            data[offset++] = M;
-            data[offset++] = Ye;
-            data[offset++] = K;
-          }
-        }
-        break;
-      default:
-        throw ImageException('Unsupported color mode');
-    }
-
-    return data;
-  }
+  Image getImage() => getImageFromJpeg(this);
 
   void _read() {
-    int marker = _nextMarker();
+    var marker = _nextMarker();
     if (marker != Jpeg.M_SOI) {
       // SOI (Start of Image)
       throw ImageException('Start Of Image marker not found.');
@@ -327,7 +149,7 @@ class JpegData {
 
     marker = _nextMarker();
     while (marker != Jpeg.M_EOI && !input.isEOS) {
-      InputBuffer block = _readBlock();
+      final block = _readBlock();
       switch (marker) {
         case Jpeg.M_APP0:
         case Jpeg.M_APP1:
@@ -401,7 +223,7 @@ class JpegData {
 
           if (marker != 0) {
             throw ImageException(
-                'Unknown JPEG marker ' + marker.toRadixString(16));
+                'Unknown JPEG marker ${marker.toRadixString(16)}');
           }
           break;
       }
@@ -411,7 +233,7 @@ class JpegData {
   }
 
   void _skipBlock() {
-    int length = input.readUint16();
+    final length = input.readUint16();
     if (length < 2) {
       throw ImageException('Invalid Block');
     }
@@ -419,7 +241,7 @@ class JpegData {
   }
 
   InputBuffer _readBlock() {
-    int length = input.readUint16();
+    final length = input.readUint16();
     if (length < 2) {
       throw ImageException('Invalid Block');
     }
@@ -427,7 +249,7 @@ class JpegData {
   }
 
   int _nextMarker() {
-    int c = 0;
+    var c = 0;
     if (input.isEOS) {
       return c;
     }
@@ -449,50 +271,62 @@ class JpegData {
     return c;
   }
 
-  num _readExifValue(InputBuffer block, int format) {
+  dynamic _readExifValue(InputBuffer block, int format, int offset) {
     const FMT_BYTE = 1;
-    //const FMT_STRING = 2;
+    const FMT_ASCII = 2;
     const FMT_USHORT = 3;
     const FMT_ULONG = 4;
     const FMT_URATIONAL = 5;
     const FMT_SBYTE = 6;
-    //const FMT_UNDEFINED = 7;
+    const FMT_UNDEFINED = 7;
     const FMT_SSHORT = 8;
     const FMT_SLONG = 9;
     const FMT_SRATIONAL = 10;
     const FMT_SINGLE = 11;
     const FMT_DOUBLE = 12;
 
-    switch (format) {
-      case FMT_SBYTE:
-        return block.readInt8();
-      case FMT_BYTE:
-        return block.readByte();
-      case FMT_USHORT:
-        return block.readUint16();
-      case FMT_ULONG:
-        return block.readUint32();
-      case FMT_URATIONAL:
-      case FMT_SRATIONAL:
-        {
-          int num = block.readInt32();
-          int den = block.readInt32();
-          if (den == 0) {
-            return 0.0;
+    final initialBlockLength = block.length;
+    try {
+      switch (format) {
+        case FMT_SBYTE:
+          return block.readInt8();
+        case FMT_BYTE:
+        case FMT_UNDEFINED:
+          return block.readByte();
+        case FMT_ASCII:
+          return block.readString(1);
+        case FMT_USHORT:
+          return block.readUint16();
+        case FMT_ULONG:
+          return block.readUint32();
+        case FMT_URATIONAL:
+        case FMT_SRATIONAL:
+          {
+            final buffer = block.peekBytes(8, offset);
+            final num = buffer.readInt32();
+            final den = buffer.readInt32();
+            if (den == 0) {
+              return 0.0;
+            }
+            return num / den;
           }
-          return num / den;
-        }
-      case FMT_SSHORT:
-        return block.readInt16();
-      case FMT_SLONG:
-        return block.readInt32();
-      // Not sure if this is correct (never seen float used in Exif format)
-      case FMT_SINGLE:
-        return block.readFloat32();
-      case FMT_DOUBLE:
-        return block.readFloat64();
-      default:
-        return 0;
+        case FMT_SSHORT:
+          return block.readInt16();
+        case FMT_SLONG:
+          return block.readInt32();
+        // Not sure if this is correct (never seen float used in Exif format)
+        case FMT_SINGLE:
+          return block.readFloat32();
+        case FMT_DOUBLE:
+          return block.peekBytes(8, offset).readFloat64();
+        default:
+          return 0;
+      }
+    } finally {
+      final bytesRead = initialBlockLength - block.length;
+      if (bytesRead < 4) {
+        block.skip(4 - bytesRead);
+      }
     }
   }
 
@@ -501,18 +335,18 @@ class JpegData {
       return; // Maximum Exif directory nesting exceeded (corrupt Exif header)
     }
 
-    int numDirEntries = block.readUint16();
+    final numDirEntries = block.readUint16();
 
-    const TAG_ORIENTATION = 0x0112;
-    const TAG_INTEROP_OFFSET = 0xA005;
-    const TAG_EXIF_OFFSET = 0x8769;
+    //const TAG_ORIENTATION = 0x0112;
+    //const TAG_INTEROP_OFFSET = 0xA005;
+    //const TAG_EXIF_OFFSET = 0x8769;
     const maxFormats = 12;
     const bytesPerFormat = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8];
 
-    for (int di = 0; di < numDirEntries; ++di) {
-      int tag = block.readUint16();
-      int format = block.readUint16();
-      int components = block.readUint32();
+    for (var di = 0; di < numDirEntries; ++di) {
+      final tag = block.readUint16();
+      final format = block.readUint16();
+      final components = block.readUint32();
 
       if (format - 1 >= maxFormats) {
         continue;
@@ -523,11 +357,13 @@ class JpegData {
         continue;
       }
 
-      int byteCount = bytesPerFormat[format];
+      final byteCount = bytesPerFormat[format];
+
+      var offset = 0;
 
       // If its bigger than 4 bytes, the dir entry contains an offset.
       if (byteCount > 4) {
-        int offset = block.readUint32();
+        offset = block.readUint32();
         if (offset + byteCount > block.length) {
           continue; // Bogus pointer offset and / or bytecount value
         }
@@ -535,30 +371,15 @@ class JpegData {
         //ValuePtr = OffsetBase+OffsetVal;
       }
 
-      switch (tag) {
-        case TAG_ORIENTATION:
-          {
-            num orientation = _readExifValue(block, format);
-            exif.orientation = orientation.toInt();
-          }
-          break;
-        case TAG_EXIF_OFFSET:
-        case TAG_INTEROP_OFFSET:
-          break;
-        default:
-          // skip unknown tags
-          break;
-      }
+      exif.data[tag] = _readExifValue(block, format, offset);
     }
   }
 
   void _readExifData(InputBuffer block) {
-    if (exif.rawData == null) {
-      exif.rawData = List<Uint8List>();
-    }
+    exif.rawData ??= <Uint8List>[];
 
-    Uint8List rawData = Uint8List.fromList(block.toUint8List());
-    exif.rawData.add(rawData);
+    final rawData = block.toUint8List().sublist(0);
+    exif.rawData!.add(rawData);
 
     const EXIF_TAG = 0x45786966; // Exif\0\0
     if (block.readUint32() != EXIF_TAG) {
@@ -568,10 +389,10 @@ class JpegData {
       return;
     }
 
-    bool saveEndian = block.bigEndian;
+    final saveEndian = block.bigEndian;
 
     // Exif Directory
-    String alignment = block.readString(2);
+    final alignment = block.readString(2);
     if (alignment == 'II') {
       // Exif is in Intel order
       block.bigEndian = false;
@@ -584,7 +405,7 @@ class JpegData {
 
     block.skip(2);
 
-    int offset = block.readUint32();
+    final offset = block.readUint32();
     if (offset < 8 || offset > 16) {
       if (offset > block.length - 16) {
         // invalid offset for first Exif IFD value ;
@@ -603,7 +424,7 @@ class JpegData {
   }
 
   void _readAppData(int marker, InputBuffer block) {
-    InputBuffer appData = block;
+    final appData = block;
 
     if (marker == Jpeg.M_APP0) {
       // 'JFIF\0'
@@ -616,11 +437,11 @@ class JpegData {
         jfif.majorVersion = appData[5];
         jfif.minorVersion = appData[6];
         jfif.densityUnits = appData[7];
-        jfif.xDensity = shiftL(appData[8], 8) | appData[9];
-        jfif.yDensity = shiftL(appData[10], 8) | appData[11];
+        jfif.xDensity = (appData[8] << 8) | appData[9];
+        jfif.yDensity = (appData[10] << 8) | appData[11];
         jfif.thumbWidth = appData[12];
         jfif.thumbHeight = appData[13];
-        int thumbSize = 3 * jfif.thumbWidth * jfif.thumbHeight;
+        final thumbSize = 3 * jfif.thumbWidth * jfif.thumbHeight;
         jfif.thumbData = appData.subset(14 + thumbSize, offset: 14);
       }
     } else if (marker == Jpeg.M_APP1) {
@@ -635,20 +456,26 @@ class JpegData {
           appData[4] == 0x65 &&
           appData[5] == 0) {
         adobe = JpegAdobe();
-        adobe.version = appData[6];
-        adobe.flags0 = shiftL(appData[7], 8) | appData[8];
-        adobe.flags1 = shiftL(appData[9], 8) | appData[10];
-        adobe.transformCode = appData[11];
+        adobe!.version = appData[6];
+        adobe!.flags0 = (appData[7] << 8) | appData[8];
+        adobe!.flags1 = (appData[9] << 8) | appData[10];
+        adobe!.transformCode = appData[11];
       }
-    } else {
-      //print("!!!! UNHANDLED APP TAG 0x${marker.toRadixString(16)}");
+    } else if (marker == Jpeg.M_COM) {
+      // Comment
+      try {
+        comment = appData.readStringUtf8();
+      } catch (e, _) {
+        // readString without 0x00 terminator causes exception. Technically
+        // bad data, but no reason to abort the rest of the image decoding.
+      }
     }
   }
 
   void _readDQT(InputBuffer block) {
     while (!block.isEOS) {
-      int n = block.readByte();
-      int prec = shiftR(n, 4);
+      var n = block.readByte();
+      final prec = (n >> 4);
       n &= 0x0F;
 
       if (n >= Jpeg.NUM_QUANT_TBLS) {
@@ -659,8 +486,8 @@ class JpegData {
         quantizationTables[n] = Int16List(64);
       }
 
-      Int16List tableData = quantizationTables[n];
-      for (int i = 0; i < Jpeg.DCTSIZE2; i++) {
+      final tableData = quantizationTables[n];
+      for (var i = 0; i < Jpeg.DCTSIZE2; i++) {
         int tmp;
         if (prec != 0) {
           tmp = block.readUint16();
@@ -668,7 +495,7 @@ class JpegData {
           tmp = block.readByte();
         }
 
-        tableData[Jpeg.dctZigZag[i]] = tmp;
+        tableData![Jpeg.dctZigZag[i]] = tmp;
       }
     }
 
@@ -683,42 +510,42 @@ class JpegData {
     }
 
     frame = JpegFrame();
-    frame.extended = (marker == Jpeg.M_SOF1);
-    frame.progressive = (marker == Jpeg.M_SOF2);
-    frame.precision = block.readByte();
-    frame.scanLines = block.readUint16();
-    frame.samplesPerLine = block.readUint16();
+    frame!.extended = (marker == Jpeg.M_SOF1);
+    frame!.progressive = (marker == Jpeg.M_SOF2);
+    frame!.precision = block.readByte();
+    frame!.scanLines = block.readUint16();
+    frame!.samplesPerLine = block.readUint16();
 
-    int numComponents = block.readByte();
+    final numComponents = block.readByte();
 
-    for (int i = 0; i < numComponents; i++) {
-      int componentId = block.readByte();
-      int x = block.readByte();
-      int h = shiftR(x, 4) & 15;
-      int v = x & 15;
-      int qId = block.readByte();
-      frame.componentsOrder.add(componentId);
-      frame.components[componentId] =
+    for (var i = 0; i < numComponents; i++) {
+      final componentId = block.readByte();
+      final x = block.readByte();
+      final h = (x >> 4) & 15;
+      final v = x & 15;
+      final qId = block.readByte();
+      frame!.componentsOrder.add(componentId);
+      frame!.components[componentId] =
           JpegComponent(h, v, quantizationTables, qId);
     }
 
-    frame.prepare();
+    frame!.prepare();
     frames.add(frame);
   }
 
   void _readDHT(InputBuffer block) {
     while (!block.isEOS) {
-      int index = block.readByte();
+      var index = block.readByte();
 
-      Uint8List bits = Uint8List(16);
-      int count = 0;
-      for (int j = 0; j < 16; j++) {
+      final bits = Uint8List(16);
+      var count = 0;
+      for (var j = 0; j < 16; j++) {
         bits[j] = block.readByte();
         count += bits[j];
       }
 
-      Uint8List huffmanValues = Uint8List(count);
-      for (int j = 0; j < count; j++) {
+      final huffmanValues = Uint8List(count);
+      for (var j = 0; j < count; j++) {
         huffmanValues[j] = block.readByte();
       }
 
@@ -745,50 +572,50 @@ class JpegData {
   }
 
   void _readSOS(InputBuffer block) {
-    int n = block.readByte();
+    final n = block.readByte();
     if (n < 1 || n > Jpeg.MAX_COMPS_IN_SCAN) {
       throw ImageException('Invalid SOS block');
     }
 
-    final components = List<dynamic>(n);
-    for (int i = 0; i < n; i++) {
-      int id = block.readByte();
-      int c = block.readByte();
+    final components = List<JpegComponent>.generate(n, (i) {
+      final id = block.readByte();
+      final c = block.readByte();
 
-      if (!frame.components.containsKey(id)) {
+      if (!frame!.components.containsKey(id)) {
         throw ImageException('Invalid Component in SOS block');
       }
 
-      JpegComponent component = frame.components[id];
-      components[i] = component;
+      final component = frame!.components[id]!;
 
-      int dc_tbl_no = shiftR(c, 4) & 15;
-      int ac_tbl_no = c & 15;
+      final dc_tbl_no = (c >> 4) & 15;
+      final ac_tbl_no = c & 15;
 
       if (dc_tbl_no < huffmanTablesDC.length) {
-        component.huffmanTableDC = huffmanTablesDC[dc_tbl_no] as List;
+        component.huffmanTableDC = huffmanTablesDC[dc_tbl_no]!;
       }
       if (ac_tbl_no < huffmanTablesAC.length) {
-        component.huffmanTableAC = huffmanTablesAC[ac_tbl_no] as List;
+        component.huffmanTableAC = huffmanTablesAC[ac_tbl_no]!;
       }
-    }
 
-    int spectralStart = block.readByte();
-    int spectralEnd = block.readByte();
-    int successiveApproximation = block.readByte();
+      return component;
+    });
 
-    int Ah = shiftR(successiveApproximation, 4) & 15;
-    int Al = successiveApproximation & 15;
+    final spectralStart = block.readByte();
+    final spectralEnd = block.readByte();
+    final successiveApproximation = block.readByte();
 
-    JpegScan(input, frame, components, resetInterval, spectralStart,
+    final Ah = (successiveApproximation >> 4) & 15;
+    final Al = successiveApproximation & 15;
+
+    JpegScan(input, frame!, components, resetInterval, spectralStart,
             spectralEnd, Ah, Al)
         .decode();
   }
 
-  List _buildHuffmanTable(Uint8List codeLengths, Uint8List values) {
-    int k = 0;
-    final code = List<dynamic>();
-    int length = 16;
+  List? _buildHuffmanTable(Uint8List codeLengths, Uint8List values) {
+    var k = 0;
+    final code = <_JpegHuffman>[];
+    var length = 16;
 
     while (length > 0 && (codeLengths[length - 1] == 0)) {
       length--;
@@ -796,18 +623,18 @@ class JpegData {
 
     code.add(_JpegHuffman());
 
-    _JpegHuffman p = code[0] as _JpegHuffman;
+    var p = code[0];
     _JpegHuffman q;
 
-    for (int i = 0; i < length; i++) {
-      for (int j = 0; j < codeLengths[i]; j++) {
-        p = code.removeLast() as _JpegHuffman;
+    for (var i = 0; i < length; i++) {
+      for (var j = 0; j < codeLengths[i]; j++) {
+        p = code.removeLast();
         if (p.children.length <= p.index) {
           p.children.length = p.index + 1;
         }
         p.children[p.index] = values[k];
         while (p.index > 0) {
-          p = code.removeLast() as _JpegHuffman;
+          p = code.removeLast();
         }
         p.index++;
         code.add(p);
@@ -835,35 +662,35 @@ class JpegData {
       }
     }
 
-    return code[0].children as List;
+    return code[0].children;
   }
 
-  List<Uint8List> _buildComponentData(
-      JpegFrame frame, JpegComponent component) {
-    final int blocksPerLine = component.blocksPerLine;
-    final int blocksPerColumn = component.blocksPerColumn;
-    int samplesPerLine = shiftL(blocksPerLine, 3);
-    Int32List R = Int32List(64);
-    Uint8List r = Uint8List(64);
-    List<Uint8List> lines = List(blocksPerColumn * 8);
+  List<Uint8List?> _buildComponentData(
+      JpegFrame? frame, JpegComponent component) {
+    final blocksPerLine = component.blocksPerLine;
+    final blocksPerColumn = component.blocksPerColumn;
+    final samplesPerLine = (blocksPerLine << 3);
+    final R = Int32List(64);
+    final r = Uint8List(64);
+    final lines = List<Uint8List?>.filled(blocksPerColumn * 8, null);
 
-    int l = 0;
-    for (int blockRow = 0; blockRow < blocksPerColumn; blockRow++) {
-      int scanLine = shiftL(blockRow, 3);
-      for (int i = 0; i < 8; i++) {
+    var l = 0;
+    for (var blockRow = 0; blockRow < blocksPerColumn; blockRow++) {
+      final scanLine = (blockRow << 3);
+      for (var i = 0; i < 8; i++) {
         lines[l++] = Uint8List(samplesPerLine);
       }
 
-      for (int blockCol = 0; blockCol < blocksPerLine; blockCol++) {
-        _quantizeAndInverse(component.quantizationTable,
+      for (var blockCol = 0; blockCol < blocksPerLine; blockCol++) {
+        quantizeAndInverse(component.quantizationTable!,
             component.blocks[blockRow][blockCol] as Int32List, r, R);
 
-        int offset = 0;
-        int sample = shiftL(blockCol, 3);
-        for (int j = 0; j < 8; j++) {
-          Uint8List line = lines[scanLine + j];
-          for (int i = 0; i < 8; i++) {
-            line[sample + i] = r[offset++];
+        var offset = 0;
+        final sample = (blockCol << 3);
+        for (var j = 0; j < 8; j++) {
+          final line = lines[scanLine + j];
+          for (var i = 0; i < 8; i++) {
+            line![sample + i] = r[offset++];
           }
         }
       }
@@ -873,207 +700,9 @@ class JpegData {
   }
 
   static int toFix(double val) {
-    const int FIXED_POINT = 20;
-    const int ONE = 1 << FIXED_POINT;
+    const FIXED_POINT = 20;
+    const ONE = 1 << FIXED_POINT;
     return (val * ONE).toInt() & 0xffffffff;
-  }
-
-  static int _clamp8(int i) => i < 0 ? 0 : i > 255 ? 255 : i;
-
-  static Uint8List dctClip;
-
-  // Quantize the coefficients and apply IDCT.
-  //
-  // A port of poppler's IDCT method which in turn is taken from:
-  // Christoph Loeffler, Adriaan Ligtenberg, George S. Moschytz,
-  // "Practical Fast 1-D DCT Algorithms with 11 Multiplications",
-  // IEEE Intl. Conf. on Acoustics, Speech & Signal Processing, 1989, 988-991.
-  void _quantizeAndInverse(Int16List quantizationTable, Int32List coefBlock,
-      Uint8List dataOut, Int32List dataIn) {
-    Int32List p = dataIn;
-
-    const int dctClipOffset = 256;
-    const int dctClipLength = 768;
-    if (dctClip == null) {
-      dctClip = Uint8List(dctClipLength);
-      int i;
-      for (i = -256; i < 0; ++i) {
-        dctClip[dctClipOffset + i] = 0;
-      }
-      for (i = 0; i < 256; ++i) {
-        dctClip[dctClipOffset + i] = i;
-      }
-      for (i = 256; i < 512; ++i) {
-        dctClip[dctClipOffset + i] = 255;
-      }
-    }
-
-    // IDCT constants (20.12 fixed point format)
-    const int COS_1 = 4017; // cos(pi/16)*4096
-    const int SIN_1 = 799; // sin(pi/16)*4096
-    const int COS_3 = 3406; // cos(3*pi/16)*4096
-    const int SIN_3 = 2276; // sin(3*pi/16)*4096
-    const int COS_6 = 1567; // cos(6*pi/16)*4096
-    const int SIN_6 = 3784; // sin(6*pi/16)*4096
-    const int SQRT_2 = 5793; // sqrt(2)*4096
-    const int SQRT_1D2 = 2896; // sqrt(2) / 2
-
-    // de-quantize
-    for (int i = 0; i < 64; i++) {
-      p[i] = (coefBlock[i] * quantizationTable[i]);
-    }
-
-    // inverse DCT on rows
-    int row = 0;
-    for (int i = 0; i < 8; ++i, row += 8) {
-      // check for all-zero AC coefficients
-      if (p[1 + row] == 0 &&
-          p[2 + row] == 0 &&
-          p[3 + row] == 0 &&
-          p[4 + row] == 0 &&
-          p[5 + row] == 0 &&
-          p[6 + row] == 0 &&
-          p[7 + row] == 0) {
-        int t = shiftR((SQRT_2 * p[0 + row] + 512), 10);
-        p[row + 0] = t;
-        p[row + 1] = t;
-        p[row + 2] = t;
-        p[row + 3] = t;
-        p[row + 4] = t;
-        p[row + 5] = t;
-        p[row + 6] = t;
-        p[row + 7] = t;
-        continue;
-      }
-
-      // stage 4
-      int v0 = shiftR((SQRT_2 * p[0 + row] + 128), 8);
-      int v1 = shiftR((SQRT_2 * p[4 + row] + 128), 8);
-      int v2 = p[2 + row];
-      int v3 = p[6 + row];
-      int v4 = shiftR((SQRT_1D2 * (p[1 + row] - p[7 + row]) + 128), 8);
-      int v7 = shiftR((SQRT_1D2 * (p[1 + row] + p[7 + row]) + 128), 8);
-      int v5 = shiftL(p[3 + row], 4);
-      int v6 = shiftL(p[5 + row], 4);
-
-      // stage 3
-      int t = shiftR((v0 - v1 + 1), 1);
-      v0 = shiftR((v0 + v1 + 1), 1);
-      v1 = t;
-      t = shiftR((v2 * SIN_6 + v3 * COS_6 + 128), 8);
-      v2 = shiftR((v2 * COS_6 - v3 * SIN_6 + 128), 8);
-      v3 = t;
-      t = shiftR((v4 - v6 + 1), 1);
-      v4 = shiftR((v4 + v6 + 1), 1);
-      v6 = t;
-      t = shiftR((v7 + v5 + 1), 1);
-      v5 = shiftR((v7 - v5 + 1), 1);
-      v7 = t;
-
-      // stage 2
-      t = shiftR((v0 - v3 + 1), 1);
-      v0 = shiftR((v0 + v3 + 1), 1);
-      v3 = t;
-      t = shiftR((v1 - v2 + 1), 1);
-      v1 = shiftR((v1 + v2 + 1), 1);
-      v2 = t;
-      t = shiftR((v4 * SIN_3 + v7 * COS_3 + 2048), 12);
-      v4 = shiftR((v4 * COS_3 - v7 * SIN_3 + 2048), 12);
-      v7 = t;
-      t = shiftR((v5 * SIN_1 + v6 * COS_1 + 2048), 12);
-      v5 = shiftR((v5 * COS_1 - v6 * SIN_1 + 2048), 12);
-      v6 = t;
-
-      // stage 1
-      p[0 + row] = (v0 + v7);
-      p[7 + row] = (v0 - v7);
-      p[1 + row] = (v1 + v6);
-      p[6 + row] = (v1 - v6);
-      p[2 + row] = (v2 + v5);
-      p[5 + row] = (v2 - v5);
-      p[3 + row] = (v3 + v4);
-      p[4 + row] = (v3 - v4);
-    }
-
-    // inverse DCT on columns
-    for (int i = 0; i < 8; ++i) {
-      int col = i;
-
-      // check for all-zero AC coefficients
-      if (p[1 * 8 + col] == 0 &&
-          p[2 * 8 + col] == 0 &&
-          p[3 * 8 + col] == 0 &&
-          p[4 * 8 + col] == 0 &&
-          p[5 * 8 + col] == 0 &&
-          p[6 * 8 + col] == 0 &&
-          p[7 * 8 + col] == 0) {
-        int t = shiftR((SQRT_2 * dataIn[i] + 8192), 14);
-        p[0 * 8 + col] = t;
-        p[1 * 8 + col] = t;
-        p[2 * 8 + col] = t;
-        p[3 * 8 + col] = t;
-        p[4 * 8 + col] = t;
-        p[5 * 8 + col] = t;
-        p[6 * 8 + col] = t;
-        p[7 * 8 + col] = t;
-        continue;
-      }
-
-      // stage 4
-      int v0 = shiftR((SQRT_2 * p[0 * 8 + col] + 2048), 12);
-      int v1 = shiftR((SQRT_2 * p[4 * 8 + col] + 2048), 12);
-      int v2 = p[2 * 8 + col];
-      int v3 = p[6 * 8 + col];
-      int v4 =
-          shiftR((SQRT_1D2 * (p[1 * 8 + col] - p[7 * 8 + col]) + 2048), 12);
-      int v7 =
-          shiftR((SQRT_1D2 * (p[1 * 8 + col] + p[7 * 8 + col]) + 2048), 12);
-      int v5 = p[3 * 8 + col];
-      int v6 = p[5 * 8 + col];
-
-      // stage 3
-      int t = shiftR((v0 - v1 + 1), 1);
-      v0 = shiftR((v0 + v1 + 1), 1);
-      v1 = t;
-      t = shiftR((v2 * SIN_6 + v3 * COS_6 + 2048), 12);
-      v2 = shiftR((v2 * COS_6 - v3 * SIN_6 + 2048), 12);
-      v3 = t;
-      t = shiftR((v4 - v6 + 1), 1);
-      v4 = shiftR((v4 + v6 + 1), 1);
-      v6 = t;
-      t = shiftR((v7 + v5 + 1), 1);
-      v5 = shiftR((v7 - v5 + 1), 1);
-      v7 = t;
-
-      // stage 2
-      t = shiftR((v0 - v3 + 1), 1);
-      v0 = shiftR((v0 + v3 + 1), 1);
-      v3 = t;
-      t = shiftR((v1 - v2 + 1), 1);
-      v1 = shiftR((v1 + v2 + 1), 1);
-      v2 = t;
-      t = shiftR((v4 * SIN_3 + v7 * COS_3 + 2048), 12);
-      v4 = shiftR((v4 * COS_3 - v7 * SIN_3 + 2048), 12);
-      v7 = t;
-      t = shiftR((v5 * SIN_1 + v6 * COS_1 + 2048), 12);
-      v5 = shiftR((v5 * COS_1 - v6 * SIN_1 + 2048), 12);
-      v6 = t;
-
-      // stage 1
-      p[0 * 8 + col] = (v0 + v7);
-      p[7 * 8 + col] = (v0 - v7);
-      p[1 * 8 + col] = (v1 + v6);
-      p[6 * 8 + col] = (v1 - v6);
-      p[2 * 8 + col] = (v2 + v5);
-      p[5 * 8 + col] = (v2 - v5);
-      p[3 * 8 + col] = (v3 + v4);
-      p[4 * 8 + col] = (v3 - v4);
-    }
-
-    // convert to 8-bit integers
-    for (int i = 0; i < 64; ++i) {
-      dataOut[i] = dctClip[(dctClipOffset + 128 + shiftR((p[i] + 8), 4))];
-    }
   }
 
   static const CRR = [
@@ -2114,20 +1743,6 @@ class JpegData {
 }
 
 class _JpegHuffman {
-  final children = List<dynamic>();
+  final children = <dynamic>[];
   int index = 0;
-}
-
-class _ComponentData {
-  int hSamples;
-  int maxHSamples;
-  int vSamples;
-  int maxVSamples;
-  List<Uint8List> lines;
-  int hScaleShift;
-  int vScaleShift;
-  _ComponentData(this.hSamples, this.maxHSamples, this.vSamples,
-      this.maxVSamples, this.lines)
-      : hScaleShift = (hSamples == 1 && maxHSamples == 2) ? 1 : 0,
-        vScaleShift = (vSamples == 1 && maxVSamples == 2) ? 1 : 0;
 }

@@ -1,4 +1,12 @@
-class PvrtcColorRgb {
+abstract class PvrtcColorRgbCore<T> {
+  T copy();
+
+  void setMin(T c);
+
+  void setMax(T c);
+}
+
+class PvrtcColorRgb extends PvrtcColorRgbCore<PvrtcColorRgb> {
   int r;
   int g;
   int b;
@@ -10,6 +18,7 @@ class PvrtcColorRgb {
         g = other.g,
         b = other.b;
 
+  @override
   PvrtcColorRgb copy() => PvrtcColorRgb.from(this);
 
   PvrtcColorRgb operator *(int x) => PvrtcColorRgb(r * x, g * x, b * x);
@@ -22,6 +31,7 @@ class PvrtcColorRgb {
 
   int dotProd(PvrtcColorRgb x) => r * x.r + g * x.g + b * x.b;
 
+  @override
   void setMin(PvrtcColorRgb c) {
     if (c.r < r) {
       r = c.r;
@@ -34,6 +44,7 @@ class PvrtcColorRgb {
     }
   }
 
+  @override
   void setMax(PvrtcColorRgb c) {
     if (c.r > r) {
       r = c.r;
@@ -47,7 +58,7 @@ class PvrtcColorRgb {
   }
 }
 
-class PvrtcColorRgba {
+class PvrtcColorRgba extends PvrtcColorRgbCore<PvrtcColorRgba> {
   int r;
   int g;
   int b;
@@ -61,6 +72,7 @@ class PvrtcColorRgba {
         b = other.b,
         a = other.a;
 
+  @override
   PvrtcColorRgba copy() => PvrtcColorRgba.from(this);
 
   PvrtcColorRgba operator *(int x) =>
@@ -74,6 +86,7 @@ class PvrtcColorRgba {
 
   int dotProd(PvrtcColorRgba x) => r * x.r + g * x.g + b * x.b + a * x.a;
 
+  @override
   void setMin(PvrtcColorRgba c) {
     if (c.r < r) {
       r = c.r;
@@ -89,6 +102,7 @@ class PvrtcColorRgba {
     }
   }
 
+  @override
   void setMax(PvrtcColorRgba c) {
     if (c.r > r) {
       r = c.r;

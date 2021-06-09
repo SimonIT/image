@@ -9,14 +9,12 @@ class VP8LColorCache {
         hashShift = 32 - hashBits;
 
   void insert(int argb) {
-    final int a = (argb * _HASH_MUL) & 0xffffffff;
-    final int key = (a >> hashShift);
+    final a = (argb * _HASH_MUL) & 0xffffffff;
+    final key = (a >> hashShift);
     colors[key] = argb;
   }
 
-  int lookup(int key) {
-    return colors[key];
-  }
+  int lookup(int key) => colors[key];
 
-  static const int _HASH_MUL = 0x1e35a7bd;
+  static const _HASH_MUL = 0x1e35a7bd;
 }

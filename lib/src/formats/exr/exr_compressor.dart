@@ -11,41 +11,36 @@ import 'exr_rle_compressor.dart';
 import 'exr_zip_compressor.dart';
 
 abstract class ExrCompressor {
-  static const int NO_COMPRESSION = 0;
-  static const int RLE_COMPRESSION = 1;
-  static const int ZIPS_COMPRESSION = 2;
-  static const int ZIP_COMPRESSION = 3;
-  static const int PIZ_COMPRESSION = 4;
-  static const int PXR24_COMPRESSION = 5;
-  static const int B44_COMPRESSION = 6;
-  static const int B44A_COMPRESSION = 7;
+  static const NO_COMPRESSION = 0;
+  static const RLE_COMPRESSION = 1;
+  static const ZIPS_COMPRESSION = 2;
+  static const ZIP_COMPRESSION = 3;
+  static const PIZ_COMPRESSION = 4;
+  static const PXR24_COMPRESSION = 5;
+  static const B44_COMPRESSION = 6;
+  static const B44A_COMPRESSION = 7;
 
   int decodedWidth = 0;
   int decodedHeight = 0;
 
-  factory ExrCompressor(int type, ExrPart hdr, int maxScanLineSize,
-      [int numScanLines]) {
+  factory ExrCompressor(int type, ExrPart hdr, int? maxScanLineSize,
+      [int? numScanLines]) {
     switch (type) {
       case RLE_COMPRESSION:
         return ExrRleCompressor(hdr, maxScanLineSize);
       case ZIPS_COMPRESSION:
-        return ExrZipCompressor(
-            hdr, maxScanLineSize, numScanLines == null ? 1 : numScanLines);
+        return ExrZipCompressor(hdr, maxScanLineSize, numScanLines ?? 1);
       case ZIP_COMPRESSION:
-        return ExrZipCompressor(
-            hdr, maxScanLineSize, numScanLines == null ? 16 : numScanLines);
+        return ExrZipCompressor(hdr, maxScanLineSize, numScanLines ?? 16);
       case PIZ_COMPRESSION:
-        return ExrPizCompressor(
-            hdr, maxScanLineSize, numScanLines == null ? 32 : numScanLines);
+        return ExrPizCompressor(hdr, maxScanLineSize, numScanLines ?? 32);
       case PXR24_COMPRESSION:
-        return ExrPxr24Compressor(
-            hdr, maxScanLineSize, numScanLines == null ? 16 : numScanLines);
+        return ExrPxr24Compressor(hdr, maxScanLineSize, numScanLines ?? 16);
       case B44_COMPRESSION:
-        return ExrB44Compressor(hdr, maxScanLineSize,
-            numScanLines == null ? 32 : numScanLines, false);
+        return ExrB44Compressor(
+            hdr, maxScanLineSize, numScanLines ?? 32, false);
       case B44A_COMPRESSION:
-        return ExrB44Compressor(hdr, maxScanLineSize,
-            numScanLines == null ? 32 : numScanLines, true);
+        return ExrB44Compressor(hdr, maxScanLineSize, numScanLines ?? 32, true);
       default:
         throw ImageException('Invalid compression type: $type');
     }
@@ -76,12 +71,13 @@ abstract class ExrCompressor {
 
   int numScanLines();
 
-  Uint8List compress(InputBuffer inPtr, int x, int y, [int width, int height]) {
+  Uint8List compress(InputBuffer input, int x, int y,
+      [int? width, int? height]) {
     throw ImageException('Unsupported compression type');
   }
 
-  Uint8List uncompress(InputBuffer inPtr, int x, int y,
-      [int width, int height]) {
+  Uint8List uncompress(InputBuffer input, int x, int y,
+      [int? width, int? height]) {
     throw ImageException('Unsupported compression type');
   }
 
@@ -95,8 +91,8 @@ abstract class InternalExrCompressor extends ExrCompressor {
   InternalExrPart get header => _header as InternalExrPart;
 
   int numSamples(int s, int a, int b) {
-    int a1 = a ~/ s;
-    int b1 = b ~/ s;
+    final a1 = a ~/ s;
+    final b1 = b ~/ s;
     return b1 - a1 + ((a1 * s < a) ? 0 : 1);
   }
 }

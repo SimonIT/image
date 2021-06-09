@@ -1,4 +1,4 @@
 class PsdEffect {
-  int version;
-  bool enabled;
+  int? version;
+  bool? enabled;
 }

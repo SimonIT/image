@@ -33,48 +33,46 @@ class Color {
   /// Create a color value from RGB values in the range [0, 255].
   ///
   /// The channel order of a uint32 encoded color is BGRA.
-  static int fromRgb(int red, int green, int blue) {
-    return getColor(red, green, blue);
-  }
+  static int fromRgb(int red, int green, int blue) =>
+      getColor(red, green, blue);
 
   /// Create a color value from RGBA values in the range [0, 255].
   ///
   /// The channel order of a uint32 encoded color is BGRA.
-  static int fromRgba(int red, int green, int blue, int alpha) {
-    return getColor(red, green, blue, alpha);
-  }
+  static int fromRgba(int red, int green, int blue, int alpha) =>
+      getColor(red, green, blue, alpha);
 
   /// Create a color value from HSL values in the range [0, 1].
   static int fromHsl(num hue, num saturation, num lightness) {
-    var rgb = hslToRgb(hue, saturation, lightness);
+    final rgb = hslToRgb(hue, saturation, lightness);
     return getColor(rgb[0], rgb[1], rgb[2]);
   }
 
   /// Create a color value from HSV values in the range [0, 1].
   static int fromHsv(num hue, num saturation, num value) {
-    var rgb = hsvToRgb(hue, saturation, value);
+    final rgb = hsvToRgb(hue, saturation, value);
     return getColor(rgb[0], rgb[1], rgb[2]);
   }
 
   /// Create a color value from XYZ values.
   static int fromXyz(num x, num y, num z) {
-    var rgb = xyzToRgb(x, y, z);
+    final rgb = xyzToRgb(x, y, z);
     return getColor(rgb[0], rgb[1], rgb[2]);
   }
 
   /// Create a color value from CIE-L*ab values.
   static int fromLab(num L, num a, num b) {
-    var rgb = labToRgb(L, a, b);
+    final rgb = labToRgb(L, a, b);
     return getColor(rgb[0], rgb[1], rgb[2]);
   }
 
   /// Compare colors from a 3 or 4 dimensional color space
   static num distance(List<num> c1, List<num> c2, bool compareAlpha) {
-    num d1 = c1[0] - c2[0];
-    num d2 = c1[1] - c2[1];
-    num d3 = c1[2] - c2[2];
+    final d1 = c1[0] - c2[0];
+    final d2 = c1[1] - c2[1];
+    final d3 = c1[2] - c2[2];
     if (compareAlpha) {
-      num dA = c1[3] - c2[3];
+      final dA = c1[3] - c2[3];
       return sqrt(max(d1 * d1, (d1 - dA) * (d1 - dA)) +
           max(d2 * d2, (d2 - dA) * (d2 - dA)) +
           max(d3 * d3, (d3 - dA) * (d3 - dA)));
@@ -100,7 +98,9 @@ int getChannel(int color, Channel channel) => channel == Channel.red
         ? getGreen(color)
         : channel == Channel.blue
             ? getBlue(color)
-            : channel == Channel.alpha ? getAlpha(color) : getLuminance(color);
+            : channel == Channel.alpha
+                ? getAlpha(color)
+                : getLuminance(color);
 
 /// Returns a new color, where the given [color]'s [channel] has been
 /// replaced with the given [value].
@@ -110,7 +110,9 @@ int setChannel(int color, Channel channel, int value) => channel == Channel.red
         ? setGreen(color, value)
         : channel == Channel.blue
             ? setBlue(color, value)
-            : channel == Channel.alpha ? setAlpha(color, value) : color;
+            : channel == Channel.alpha
+                ? setAlpha(color, value)
+                : color;
 
 /// Get the red channel from the [color].
 int getRed(int color) => (color) & 0xff;
@@ -146,34 +148,34 @@ int setAlpha(int color, int value) =>
 /// Returns a new color of [src] alpha-blended onto [dst]. The opacity of [src]
 /// is additionally scaled by [fraction] / 255.
 int alphaBlendColors(int dst, int src, [int fraction = 0xff]) {
-  int srcAlpha = getAlpha(src);
+  final srcAlpha = getAlpha(src);
   if (srcAlpha == 255 && fraction == 0xff) {
     // src is fully opaque, nothing to blend
     return src;
   }
-  double a = (srcAlpha / 255.0);
+  var a = (srcAlpha / 255.0);
   if (fraction != 0xff) {
     a *= (fraction / 255.0);
   }
 
-  int sr = (getRed(src) * a).round();
-  int sg = (getGreen(src) * a).round();
-  int sb = (getBlue(src) * a).round();
-  int sa = (srcAlpha * a).round();
+  final sr = (getRed(src) * a).round();
+  final sg = (getGreen(src) * a).round();
+  final sb = (getBlue(src) * a).round();
+  final sa = (srcAlpha * a).round();
 
-  int dr = (getRed(dst) * (1.0 - a)).round();
-  int dg = (getGreen(dst) * (1.0 - a)).round();
-  int db = (getBlue(dst) * (1.0 - a)).round();
-  int da = (getAlpha(dst) * (1.0 - a)).round();
+  final dr = (getRed(dst) * (1.0 - a)).round();
+  final dg = (getGreen(dst) * (1.0 - a)).round();
+  final db = (getBlue(dst) * (1.0 - a)).round();
+  final da = (getAlpha(dst) * (1.0 - a)).round();
 
   return getColor(sr + dr, sg + dg, sb + db, sa + da);
 }
 
 /// Returns the luminance (grayscale) value of the [color].
 int getLuminance(int color) {
-  int r = getRed(color);
-  int g = getGreen(color);
-  int b = getBlue(color);
+  final r = getRed(color);
+  final g = getGreen(color);
+  final b = getBlue(color);
   return (0.299 * r + 0.587 * g + 0.114 * b).round();
 }
 
@@ -186,11 +188,11 @@ int getLuminanceRgb(int r, int g, int b) =>
 /// Returns a list [r, g, b] with values in the range [0, 255].
 List<int> hslToRgb(num hue, num saturation, num lightness) {
   if (saturation == 0) {
-    int gray = (lightness * 255.0).toInt();
+    final gray = (lightness * 255.0).toInt();
     return [gray, gray, gray];
   }
 
-  hue2rgb(num p, num q, num t) {
+  num hue2rgb(num p, num q, num t) {
     if (t < 0.0) {
       t += 1.0;
     }
@@ -209,14 +211,14 @@ List<int> hslToRgb(num hue, num saturation, num lightness) {
     return p;
   }
 
-  var q = lightness < 0.5
+  final q = lightness < 0.5
       ? lightness * (1.0 + saturation)
       : lightness + saturation - lightness * saturation;
-  var p = 2.0 * lightness - q;
+  final p = 2.0 * lightness - q;
 
-  var r = hue2rgb(p, q, hue + 1.0 / 3.0);
-  var g = hue2rgb(p, q, hue);
-  var b = hue2rgb(p, q, hue - 1.0 / 3.0);
+  final r = hue2rgb(p, q, hue + 1.0 / 3.0);
+  final g = hue2rgb(p, q, hue);
+  final b = hue2rgb(p, q, hue - 1.0 / 3.0);
 
   return [(r * 255.0).round(), (g * 255.0).round(), (b * 255.0).round()];
 }
@@ -226,15 +228,15 @@ List<int> hslToRgb(num hue, num saturation, num lightness) {
 /// Returns a list [r, g, b] with values in the range [0, 255].
 List<int> hsvToRgb(num hue, num saturation, num brightness) {
   if (saturation == 0) {
-    var gray = (brightness * 255.0).round();
+    final gray = (brightness * 255.0).round();
     return [gray, gray, gray];
   }
 
-  num h = (hue - hue.floor()) * 6.0;
-  num f = h - h.floor();
-  num p = brightness * (1.0 - saturation);
-  num q = brightness * (1.0 - saturation * f);
-  num t = brightness * (1.0 - (saturation * (1.0 - f)));
+  final num h = (hue - hue.floor()) * 6.0;
+  final f = h - h.floor();
+  final num p = brightness * (1.0 - saturation);
+  final num q = brightness * (1.0 - saturation * f);
+  final num t = brightness * (1.0 - (saturation * (1.0 - f)));
 
   switch (h.toInt()) {
     case 0:
@@ -284,18 +286,18 @@ List<num> rgbToHsl(num r, num g, num b) {
   r /= 255.0;
   g /= 255.0;
   b /= 255.0;
-  var mx = max(r, max(g, b));
-  var mn = min(r, min(g, b));
+  final mx = max(r, max(g, b));
+  final mn = min(r, min(g, b));
   num h;
-  var l = (mx + mn) / 2.0;
+  final l = (mx + mn) / 2.0;
 
   if (mx == mn) {
     return [0.0, 0.0, l];
   }
 
-  var d = mx - mn;
+  final d = mx - mn;
 
-  var s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+  final s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
 
   if (mx == r) {
     h = (g - b) / d + (g < b ? 6.0 : 0.0);
@@ -381,29 +383,29 @@ List<int> cmykToRgb(num c, num m, num y, num k) {
 
 /// Convert a CIE-L*ab color to RGB.
 List<int> labToRgb(num l, num a, num b) {
-  const num ref_x = 95.047;
-  const num ref_y = 100.000;
-  const num ref_z = 108.883;
+  const ref_x = 95.047;
+  const ref_y = 100.000;
+  const ref_z = 108.883;
 
   num y = (l + 16.0) / 116.0;
   num x = a / 500.0 + y;
   num z = y - b / 200.0;
 
-  num y3 = pow(y, 3);
+  final y3 = pow(y, 3);
   if (y3 > 0.008856) {
     y = y3;
   } else {
     y = (y - 16 / 116) / 7.787;
   }
 
-  num x3 = pow(x, 3);
+  final x3 = pow(x, 3);
   if (x3 > 0.008856) {
     x = x3;
   } else {
     x = (x - 16 / 116) / 7.787;
   }
 
-  num z3 = pow(z, 3);
+  final z3 = pow(z, 3);
   if (z3 > 0.008856) {
     z = z3;
   } else {

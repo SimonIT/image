@@ -4,7 +4,6 @@ import '../../image_exception.dart';
 import '../../internal/internal.dart';
 import '../../util/input_buffer.dart';
 import '../../util/output_buffer.dart';
-import 'exr_channel.dart';
 import 'exr_compressor.dart';
 import 'exr_huffman.dart';
 import 'exr_part.dart';
@@ -13,7 +12,7 @@ import 'exr_wavelet.dart';
 /// Wavelet compression
 abstract class ExrPizCompressor extends ExrCompressor {
   factory ExrPizCompressor(
-          ExrPart header, int maxScanLineSize, int numScanLines) =
+          ExrPart header, int? maxScanLineSize, int numScanLines) =
       InternalExrPizCompressor;
 }
 
@@ -23,52 +22,51 @@ class InternalExrPizCompressor extends InternalExrCompressor
   InternalExrPizCompressor(
       ExrPart header, this._maxScanLineSize, this._numScanLines)
       : super(header as InternalExrPart) {
-    _channelData = List<_PizChannelData>(header.channels.length);
-    for (int i = 0; i < _channelData.length; ++i) {
-      _channelData[i] = _PizChannelData();
-    }
+    _channelData = List<_PizChannelData>.generate(
+        header.channels.length, (_) => _PizChannelData(),
+        growable: false);
 
-    int tmpBufferSize = (_maxScanLineSize * _numScanLines) ~/ 2;
+    final tmpBufferSize = (_maxScanLineSize! * _numScanLines) ~/ 2;
     _tmpBuffer = Uint16List(tmpBufferSize);
   }
 
+  @override
   int numScanLines() => _numScanLines;
 
-  Uint8List compress(InputBuffer inPtr, int x, int y, [int width, int height]) {
+  @override
+  Uint8List compress(InputBuffer input, int x, int y,
+      [int? width, int? height]) {
     throw ImageException('Piz compression not yet supported.');
   }
 
-  Uint8List uncompress(InputBuffer inPtr, int x, int y,
-      [int width, int height]) {
-    if (width == null) {
-      width = header.width;
-    }
-    if (height == null) {
-      height = header.linesInBuffer;
-    }
+  @override
+  Uint8List uncompress(InputBuffer input, int x, int y,
+      [int? width, int? height]) {
+    width ??= header.width;
+    height ??= header.linesInBuffer;
 
-    int minX = x;
-    int maxX = x + width - 1;
-    int minY = y;
-    int maxY = y + height - 1;
+    final minX = x;
+    var maxX = x + width! - 1;
+    final minY = y;
+    var maxY = y + height! - 1;
 
-    if (maxX > header.width) {
-      maxX = header.width - 1;
+    if (maxX > header.width!) {
+      maxX = header.width! - 1;
     }
-    if (maxY > header.height) {
-      maxY = header.height - 1;
+    if (maxY > header.height!) {
+      maxY = header.height! - 1;
     }
 
     decodedWidth = (maxX - minX) + 1;
     decodedHeight = (maxY - minY) + 1;
 
-    int tmpBufferEnd = 0;
-    List<ExrChannel> channels = header.channels;
-    final int numChannels = channels.length;
+    var tmpBufferEnd = 0;
+    final channels = header.channels;
+    final numChannels = channels.length;
 
-    for (int i = 0; i < numChannels; ++i) {
-      ExrChannel ch = channels[i];
-      _PizChannelData cd = _channelData[i];
+    for (var i = 0; i < numChannels; ++i) {
+      final ch = channels[i];
+      final cd = _channelData[i]!;
       cd.start = tmpBufferEnd;
       cd.end = cd.start;
 
@@ -81,81 +79,80 @@ class InternalExrPizCompressor extends InternalExrCompressor
       tmpBufferEnd += cd.nx * cd.ny * cd.size;
     }
 
-    int minNonZero = inPtr.readUint16();
-    int maxNonZero = inPtr.readUint16();
+    final minNonZero = input.readUint16();
+    final maxNonZero = input.readUint16();
 
     if (maxNonZero >= BITMAP_SIZE) {
-      throw ImageException("Error in header for PIZ-compressed data "
-          "(invalid bitmap size).");
+      throw ImageException('Error in header for PIZ-compressed data '
+          '(invalid bitmap size).');
     }
 
-    Uint8List bitmap = Uint8List(BITMAP_SIZE);
+    final bitmap = Uint8List(BITMAP_SIZE);
     if (minNonZero <= maxNonZero) {
-      InputBuffer b = inPtr.readBytes(maxNonZero - minNonZero + 1);
-      for (int i = 0, j = minNonZero, len = b.length; i < len; ++i) {
+      final b = input.readBytes(maxNonZero - minNonZero + 1);
+      for (var i = 0, j = minNonZero, len = b.length; i < len; ++i) {
         bitmap[j++] = b[i];
       }
     }
 
-    Uint16List lut = Uint16List(USHORT_RANGE);
-    int maxValue = _reverseLutFromBitmap(bitmap, lut);
+    final lut = Uint16List(USHORT_RANGE);
+    final maxValue = _reverseLutFromBitmap(bitmap, lut);
 
     // Huffman decoding
-    int length = inPtr.readUint32();
-    ExrHuffman.uncompress(inPtr, length, _tmpBuffer, tmpBufferEnd);
+    final length = input.readUint32();
+    ExrHuffman.uncompress(input, length, _tmpBuffer, tmpBufferEnd);
 
     // Wavelet decoding
-    for (int i = 0; i < numChannels; ++i) {
-      _PizChannelData cd = _channelData[i];
-      for (int j = 0; j < cd.size; ++j) {
-        ExrWavelet.decode(_tmpBuffer, cd.start + j, cd.nx, cd.size, cd.ny,
+    for (var i = 0; i < numChannels; ++i) {
+      final cd = _channelData[i]!;
+      for (var j = 0; j < cd.size; ++j) {
+        ExrWavelet.decode(_tmpBuffer!, cd.start + j, cd.nx, cd.size, cd.ny,
             cd.nx * cd.size, maxValue);
       }
     }
 
     // Expand the pixel data to their original range
-    _applyLut(lut, _tmpBuffer, tmpBufferEnd);
+    _applyLut(lut, _tmpBuffer!, tmpBufferEnd);
 
-    if (_output == null) {
-      _output = OutputBuffer(
-          size: (_maxScanLineSize * _numScanLines) + (65536 + 8192));
-    }
-    _output.rewind();
+    _output ??= OutputBuffer(
+        size: (_maxScanLineSize! * _numScanLines) + (65536 + 8192));
+
+    _output!.rewind();
 
     //int count = 0;
     // Rearrange the pixel data into the format expected by the caller.
-    for (int y = minY; y <= maxY; ++y) {
-      for (int i = 0; i < numChannels; ++i) {
-        _PizChannelData cd = _channelData[i];
+    for (var y = minY; y <= maxY; ++y) {
+      for (var i = 0; i < numChannels; ++i) {
+        final cd = _channelData[i]!;
 
         if ((y % cd.ys) != 0) {
           continue;
         }
 
-        for (int x = cd.nx * cd.size; x > 0; --x) {
-          _output.writeUint16(_tmpBuffer[cd.end++]);
+        for (var x = cd.nx * cd.size; x > 0; --x) {
+          _output!.writeUint16(_tmpBuffer![cd.end++]);
         }
       }
     }
 
-    return _output.getBytes() as Uint8List;
+    return _output!.getBytes() as Uint8List;
   }
 
   void _applyLut(List<int> lut, List<int> data, int nData) {
-    for (int i = 0; i < nData; ++i) {
+    for (var i = 0; i < nData; ++i) {
       data[i] = lut[data[i]];
     }
   }
 
   int _reverseLutFromBitmap(Uint8List bitmap, Uint16List lut) {
-    int k = 0;
-    for (int i = 0; i < USHORT_RANGE; ++i) {
+    var k = 0;
+    for (var i = 0; i < USHORT_RANGE; ++i) {
       if ((i == 0) || (bitmap[i >> 3] & (1 << (i & 7))) != 0) {
         lut[k++] = i;
       }
     }
 
-    int n = k - 1;
+    final n = k - 1;
 
     while (k < USHORT_RANGE) {
       lut[k++] = 0;
@@ -164,21 +161,21 @@ class InternalExrPizCompressor extends InternalExrCompressor
     return n; // maximum k where lut[k] is non-zero,
   }
 
-  static const int USHORT_RANGE = 1 << 16;
-  static const int BITMAP_SIZE = 8192;
+  static const USHORT_RANGE = 1 << 16;
+  static const BITMAP_SIZE = 8192;
 
-  OutputBuffer _output;
-  int _maxScanLineSize;
-  int _numScanLines;
-  List<_PizChannelData> _channelData;
-  Uint16List _tmpBuffer;
+  OutputBuffer? _output;
+  final int? _maxScanLineSize;
+  final int _numScanLines;
+  late List<_PizChannelData?> _channelData;
+  Uint16List? _tmpBuffer;
 }
 
 class _PizChannelData {
-  int start;
-  int end;
-  int nx;
-  int ny;
-  int ys;
-  int size;
+  late int start;
+  late int end;
+  late int nx;
+  late int ny;
+  late int ys;
+  late int size;
 }

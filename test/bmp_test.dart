@@ -2,29 +2,31 @@ import 'dart:io';
 import 'package:image/image.dart';
 import 'package:test/test.dart';
 
+import 'paths.dart';
+
 void main() {
-  Directory dir = Directory('test/res/bmp');
+  final dir = Directory('test/res/bmp');
   if (!dir.existsSync()) {
     return;
   }
-  var files = dir.listSync();
+  final files = dir.listSync().whereType<File>();
 
   group('BMP', () {
     for (var f in files) {
-      if (f is! File || !f.path.endsWith('.bmp')) {
+      if (!f.path.endsWith('.bmp')) {
         continue;
       }
 
-      String name = f.path.split(RegExp(r'(/|\\)')).last;
-      test('$name', () {
-        List<int> bytes = (f as File).readAsBytesSync();
-        Image image = BmpDecoder().decodeImage(bytes);
+      final name = f.path.split(RegExp(r'(/|\\)')).last;
+      test(name, () {
+        final List<int> bytes = f.readAsBytesSync();
+        final image = BmpDecoder().decodeImage(bytes);
         if (image == null) {
           throw ImageException('Unable to decode TGA Image: $name.');
         }
 
-        List<int> png = PngEncoder().encodeImage(image);
-        File('out/bmp/${name}.png')
+        final png = PngEncoder().encodeImage(image);
+        File('$tmpPath/out/bmp/$name.png')
           ..createSync(recursive: true)
           ..writeAsBytesSync(png);
       });

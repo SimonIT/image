@@ -1,11 +1,10 @@
 import '../../image_exception.dart';
-import '../../hdr/hdr_image.dart';
 import '../../util/input_buffer.dart';
 
 class ExrChannel {
-  static const int TYPE_UINT = HdrImage.UINT;
-  static const int TYPE_HALF = HdrImage.HALF;
-  static const int TYPE_FLOAT = HdrImage.FLOAT;
+  static const TYPE_UINT = 0;
+  static const TYPE_HALF = 1;
+  static const TYPE_FLOAT = 2;
 
   // Channel Names
 
@@ -48,21 +47,21 @@ class ExrChannel {
   /// A numerical identifier for the object represented by a sample.
   static const String ID = 'id';
 
-  String name;
-  int type;
-  int size;
-  bool pLinear;
-  int xSampling;
-  int ySampling;
+  String? name;
+  late int type;
+  late int size;
+  late bool pLinear;
+  late int xSampling;
+  late int ySampling;
 
   ExrChannel(InputBuffer input) {
     name = input.readString();
-    if (name == null || name.isEmpty) {
+    if (name == null || name!.isEmpty) {
       name = null;
       return;
     }
     type = input.readUint32();
-    int i = input.readByte();
+    final i = input.readByte();
     assert(i == 0 || i == 1);
     pLinear = i == 1;
     input.skip(3);

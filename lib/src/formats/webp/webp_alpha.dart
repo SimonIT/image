@@ -17,7 +17,7 @@ class WebPAlpha {
   bool isAlphaDecoded = false;
 
   WebPAlpha(this.input, this.width, this.height) {
-    int b = input.readByte();
+    final b = input.readByte();
     method = b & 0x03;
     filter = (b >> 2) & 0x03;
     preProcessing = (b >> 4) & 0x03;
@@ -25,7 +25,7 @@ class WebPAlpha {
 
     if (isValid) {
       if (method == ALPHA_NO_COMPRESSION) {
-        final int alphaDecodedSize = width * height;
+        final alphaDecodedSize = width * height;
         if (input.length < alphaDecodedSize) {
           rsrv = 1;
         }
@@ -55,11 +55,11 @@ class WebPAlpha {
       return false;
     }
 
-    dynamic unfilterFunc = WebPFilters.UNFILTERS[filter];
+    final unfilterFunc = WebPFilters.UNFILTERS[filter];
 
     if (method == ALPHA_NO_COMPRESSION) {
-      final int offset = row * width;
-      final int numPixels = numRows * width;
+      final offset = row * width;
+      final numPixels = numRows * width;
 
       output.setRange(offset, numPixels, input.buffer, input.position + offset);
     } else {
@@ -87,8 +87,7 @@ class WebPAlpha {
 
   bool _dequantizeLevels(
       Uint8List data, int width, int height, int row, int num_rows) {
-    if (data == null ||
-        width <= 0 ||
+    if (width <= 0 ||
         height <= 0 ||
         row < 0 ||
         num_rows < 0 ||
@@ -103,12 +102,12 @@ class WebPAlpha {
     // Decode (with special row processing).
     return _use8bDecode
         ? _vp8l.decodeAlphaData(_vp8l.webp.width, _vp8l.webp.height, lastRow)
-        : _vp8l.decodeImageData(_vp8l.pixels, _vp8l.webp.width,
+        : _vp8l.decodeImageData(_vp8l.pixels!, _vp8l.webp.width,
             _vp8l.webp.height, lastRow, _vp8l.extractAlphaRows);
   }
 
   bool _decodeAlphaHeader() {
-    WebPInfo webp = WebPInfo();
+    final webp = WebPInfo();
     webp.width = width;
     webp.height = height;
 
@@ -134,7 +133,7 @@ class WebPAlpha {
     return true;
   }
 
-  InternalVP8L _vp8l;
+  late InternalVP8L _vp8l;
 
   // Although alpha channel
   // requires only 1 byte per
@@ -143,7 +142,7 @@ class WebPAlpha {
   bool _use8bDecode = false;
 
   // Alpha related constants.
-  static const int ALPHA_NO_COMPRESSION = 0;
-  static const int ALPHA_LOSSLESS_COMPRESSION = 1;
-  static const int ALPHA_PREPROCESSED_LEVELS = 1;
+  static const ALPHA_NO_COMPRESSION = 0;
+  static const ALPHA_LOSSLESS_COMPRESSION = 1;
+  static const ALPHA_PREPROCESSED_LEVELS = 1;
 }

@@ -5,9 +5,9 @@ import '../../internal/bit_operators.dart';
 class ExrWavelet {
   static void decode(
       Uint16List input, int si, int nx, int ox, int ny, int oy, int mx) {
-    bool w14 = (mx < (1 << 14));
-    int n = (nx > ny) ? ny : nx;
-    int p = 1;
+    final w14 = (mx < (1 << 14));
+    final n = (nx > ny) ? ny : nx;
+    var p = 1;
     int p2;
 
     // Search max level
@@ -19,28 +19,28 @@ class ExrWavelet {
     p2 = p;
     p >>= 1;
 
-    List<int> a_b = [0, 0];
+    final a_b = [0, 0];
 
     // Hierarchical loop on smaller dimension n
     while (p >= 1) {
-      int py = si;
-      int ey = si + oy * (ny - p2);
-      int oy1 = oy * p;
-      int oy2 = oy * p2;
-      int ox1 = ox * p;
-      int ox2 = ox * p2;
+      var py = si;
+      final ey = si + oy * (ny - p2);
+      final oy1 = oy * p;
+      final oy2 = oy * p2;
+      final ox1 = ox * p;
+      final ox2 = ox * p2;
       int i00, i01, i10, i11;
 
       // Y loop
       for (; py <= ey; py += oy2) {
-        int px = py;
-        int ex = py + ox * (nx - p2);
+        var px = py;
+        final ex = py + ox * (nx - p2);
 
         // X loop
         for (; px <= ex; px += ox2) {
-          int p01 = px + ox1;
-          int p10 = px + oy1;
-          int p11 = p10 + ox1;
+          final p01 = px + ox1;
+          final p10 = px + oy1;
+          final p11 = p10 + ox1;
 
           // 2D wavelet decoding
           if (w14) {
@@ -80,7 +80,7 @@ class ExrWavelet {
 
         // Decode (1D) odd column (still in Y loop)
         if (nx & p != 0) {
-          int p10 = px + oy1;
+          final p10 = px + oy1;
 
           if (w14) {
             wdec14(input[px], input[p10], a_b);
@@ -98,11 +98,11 @@ class ExrWavelet {
 
       // Decode (1D) odd line (must loop in X)
       if (ny & p != 0) {
-        int px = py;
-        int ex = py + ox * (nx - p2);
+        var px = py;
+        final ex = py + ox * (nx - p2);
 
         for (; px <= ex; px += ox2) {
-          int p01 = px + ox1;
+          final p01 = px + ox1;
 
           if (w14) {
             wdec14(input[px], input[p01], a_b);
@@ -124,30 +124,30 @@ class ExrWavelet {
     }
   }
 
-  static const int NBITS = 16;
-  static const int A_OFFSET = 1 << (NBITS - 1);
-  static const int M_OFFSET = 1 << (NBITS - 1);
-  static const int MOD_MASK = (1 << NBITS) - 1;
+  static const NBITS = 16;
+  static const A_OFFSET = 1 << (NBITS - 1);
+  static const M_OFFSET = 1 << (NBITS - 1);
+  static const MOD_MASK = (1 << NBITS) - 1;
 
   static void wdec14(int l, int h, List<int> a_b) {
-    int ls = uint16ToInt16(l);
-    int hs = uint16ToInt16(h);
+    final ls = uint16ToInt16(l);
+    final hs = uint16ToInt16(h);
 
-    int hi = hs;
-    int ai = ls + (hi & 1) + (hi >> 1);
+    final hi = hs;
+    final ai = ls + (hi & 1) + (hi >> 1);
 
-    int as = ai;
-    int bs = ai - hi;
+    final as = ai;
+    final bs = ai - hi;
 
     a_b[0] = as;
     a_b[1] = bs;
   }
 
   static void wdec16(int l, int h, List<int> a_b) {
-    int m = l;
-    int d = h;
-    int bb = (m - (d >> 1)) & MOD_MASK;
-    int aa = (d + bb - A_OFFSET) & MOD_MASK;
+    final m = l;
+    final d = h;
+    final bb = (m - (d >> 1)) & MOD_MASK;
+    final aa = (d + bb - A_OFFSET) & MOD_MASK;
     a_b[1] = bb;
     a_b[0] = aa;
   }

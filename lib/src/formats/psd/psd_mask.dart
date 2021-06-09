@@ -1,16 +1,16 @@
 import '../../util/input_buffer.dart';
 
 class PsdMask {
-  int top;
-  int left;
-  int right;
-  int bottom;
-  int defaultColor;
-  int flags;
+  late int top;
+  late int left;
+  late int right;
+  late int bottom;
+  late int defaultColor;
+  late int flags;
   int params = 0;
 
   PsdMask(InputBuffer input) {
-    int len = input.length;
+    final len = input.length;
 
     top = input.readUint32();
     left = input.readUint32();

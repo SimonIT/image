@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../image.dart';
 import '../util/clip_line.dart';
+import 'draw_circle.dart';
 import 'draw_pixel.dart';
 
 /// Draw a line into [image].
@@ -10,7 +11,7 @@ import 'draw_pixel.dart';
 /// [thickness] determines how thick the line should be drawn, in pixels.
 Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
     {bool antialias = false, num thickness = 1}) {
-  List<int> line = [x1, y1, x2, y2];
+  final line = [x1, y1, x2, y2];
   if (!clipLine(line, [0, 0, image.width - 1, image.height - 1])) {
     return image;
   }
@@ -20,34 +21,63 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
   x2 = line[2];
   y2 = line[3];
 
-  int dx = (x2 - x1);
-  int dy = (y2 - y1);
+  var dx = (x2 - x1);
+  var dy = (y2 - y1);
+
+  final radius = (thickness / 2.0).floor();
 
   // Drawing a single point.
   if (dx == 0 && dy == 0) {
-    return drawPixel(image, x1, y1, color);
+    thickness == 1
+        ? drawPixel(image, x1, y1, color)
+        : fillCircle(image, x1, y1, radius, color);
+    return image;
   }
 
   // Axis-aligned lines
   if (dx == 0) {
     if (dy < 0) {
-      for (int y = y2; y <= y1; ++y) {
-        drawPixel(image, x1, y, color);
+      for (var y = y2; y <= y1; ++y) {
+        if (thickness <= 1) {
+          drawPixel(image, x1, y, color);
+        } else {
+          for (var i = 0; i < thickness; i++) {
+            drawPixel(image, x1 - radius + i, y, color);
+          }
+        }
       }
     } else {
-      for (int y = y1; y <= y2; ++y) {
-        drawPixel(image, x1, y, color);
+      for (var y = y1; y <= y2; ++y) {
+        if (thickness <= 1) {
+          drawPixel(image, x1, y, color);
+        } else {
+          for (var i = 0; i < thickness; i++) {
+            drawPixel(image, x1 - radius + i, y, color);
+          }
+        }
       }
     }
     return image;
   } else if (dy == 0) {
     if (dx < 0) {
-      for (int x = x2; x <= x1; ++x) {
-        drawPixel(image, x, y1, color);
+      for (var x = x2; x <= x1; ++x) {
+        if (thickness <= 1) {
+          drawPixel(image, x, y1, color);
+        } else {
+          for (var i = 0; i < thickness; i++) {
+            drawPixel(image, x, y1 - radius + i, color);
+          }
+        }
       }
     } else {
-      for (int x = x1; x <= x2; ++x) {
-        drawPixel(image, x, y1, color);
+      for (var x = x1; x <= x2; ++x) {
+        if (thickness <= 1) {
+          drawPixel(image, x, y1, color);
+        } else {
+          for (var i = 0; i < thickness; i++) {
+            drawPixel(image, x, y1 - radius + i, color);
+          }
+        }
       }
     }
     return image;
@@ -61,7 +91,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
     dy = dy.abs();
     if (dy <= dx) {
       // More-or-less horizontal. use wid for vertical stroke
-      num ac = cos(atan2(dy, dx));
+      final num ac = cos(atan2(dy, dx));
       int wid;
       if (ac != 0) {
         wid = thickness ~/ ac;
@@ -73,9 +103,9 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
         wid = 1;
       }
 
-      int d = 2 * dy - dx;
-      int incr1 = 2 * dy;
-      int incr2 = 2 * (dy - dx);
+      var d = 2 * dy - dx;
+      final incr1 = 2 * dy;
+      final incr2 = 2 * (dy - dx);
 
       int x, y;
       int ydirflag;
@@ -93,8 +123,8 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
       }
 
       // Set up line thickness
-      int wstart = (y - wid / 2).toInt();
-      for (int w = wstart; w < wstart + wid; w++) {
+      var wstart = (y - wid / 2).toInt();
+      for (var w = wstart; w < wstart + wid; w++) {
         drawPixel(image, x, w, color);
       }
 
@@ -108,7 +138,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
             d += incr2;
           }
           wstart = (y - wid / 2).toInt();
-          for (int w = wstart; w < wstart + wid; w++) {
+          for (var w = wstart; w < wstart + wid; w++) {
             drawPixel(image, x, w, color);
           }
         }
@@ -122,14 +152,14 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
             d += incr2;
           }
           wstart = (y - wid / 2).toInt();
-          for (int w = wstart; w < wstart + wid; w++) {
+          for (var w = wstart; w < wstart + wid; w++) {
             drawPixel(image, x, w, color);
           }
         }
       }
     } else {
       // More-or-less vertical. use wid for horizontal stroke
-      num as = sin(atan2(dy, dx));
+      final as = sin(atan2(dy, dx));
       int wid;
       if (as != 0) {
         wid = thickness ~/ as;
@@ -140,9 +170,9 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
         wid = 1;
       }
 
-      int d = 2 * dx - dy;
-      int incr1 = 2 * dx;
-      int incr2 = 2 * (dx - dy);
+      var d = 2 * dx - dy;
+      final incr1 = 2 * dx;
+      final incr2 = 2 * (dx - dy);
       int x, y;
       int yend;
       int xdirflag;
@@ -159,8 +189,8 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
       }
 
       // Set up line thickness
-      int wstart = (x - wid / 2).toInt();
-      for (int w = wstart; w < wstart + wid; w++) {
+      var wstart = (x - wid / 2).toInt();
+      for (var w = wstart; w < wstart + wid; w++) {
         drawPixel(image, w, y, color);
       }
 
@@ -174,7 +204,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
             d += incr2;
           }
           wstart = (x - wid / 2).toInt();
-          for (int w = wstart; w < wstart + wid; w++) {
+          for (var w = wstart; w < wstart + wid; w++) {
             drawPixel(image, w, y, color);
           }
         }
@@ -188,7 +218,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
             d += incr2;
           }
           wstart = (x - wid / 2).toInt();
-          for (int w = wstart; w < wstart + wid; w++) {
+          for (var w = wstart; w < wstart + wid; w++) {
             drawPixel(image, w, y, color);
           }
         }
@@ -200,7 +230,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
 
   // Antialias Line
 
-  num ag = (dy.abs() < dx.abs()) ? cos(atan2(dy, dx)) : sin(atan2(dy, dx));
+  final ag = (dy.abs() < dx.abs()) ? cos(atan2(dy, dx)) : sin(atan2(dy, dx));
 
   int wid;
   if (ag != 0.0) {
@@ -214,7 +244,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
 
   if (dx.abs() > dy.abs()) {
     if (dx < 0) {
-      int tmp = x1;
+      var tmp = x1;
       x1 = x2;
       x2 = tmp;
       tmp = y1;
@@ -224,13 +254,13 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
       dy = y2 - y1;
     }
 
-    int y = y1;
-    int inc = (dy * 65536) ~/ dx;
-    int frac = 0;
+    var y = y1;
+    final inc = (dy * 65536) ~/ dx;
+    var frac = 0;
 
-    for (int x = x1; x <= x2; x++) {
-      int wstart = (y - wid ~/ 2);
-      for (int w = wstart; w < wstart + wid; w++) {
+    for (var x = x1; x <= x2; x++) {
+      final wstart = (y - wid ~/ 2);
+      for (var w = wstart; w < wstart + wid; w++) {
         drawPixel(image, x, w, color, (frac >> 8) & 0xff);
         drawPixel(image, x, w + 1, color, (_xor(frac) >> 8) & 0xff);
       }
@@ -246,7 +276,7 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
     }
   } else {
     if (dy < 0) {
-      int tmp = x1;
+      var tmp = x1;
       x1 = x2;
       x2 = tmp;
       tmp = y1;
@@ -256,13 +286,13 @@ Image drawLine(Image image, int x1, int y1, int x2, int y2, int color,
       dy = y2 - y1;
     }
 
-    int x = x1;
-    int inc = (dx * 65536) ~/ dy;
-    int frac = 0;
+    var x = x1;
+    final inc = (dx * 65536) ~/ dy;
+    var frac = 0;
 
-    for (int y = y1; y <= y2; y++) {
-      int wstart = (x - wid ~/ 2);
-      for (int w = wstart; w < wstart + wid; w++) {
+    for (var y = y1; y <= y2; y++) {
+      final wstart = (x - wid ~/ 2);
+      for (var w = wstart; w < wstart + wid; w++) {
         drawPixel(image, w, y, color, (frac >> 8) & 0xff);
         drawPixel(image, w + 1, y, color, (_xor(frac) >> 8) & 0xff);
       }

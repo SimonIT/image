@@ -22,15 +22,15 @@ class WebPFrame {
   // displayed (before rendering the next frame) on the canvas.
   // If true, the frame is cleared to the background color. If false,
   // frame is left and the next frame drawn over it.
-  bool clearFrame;
+  late bool clearFrame;
 
-  WebPFrame(InputBuffer input, int size) {
-    x = input.readUint24() * 2;
-    y = input.readUint24() * 2;
-    width = input.readUint24() + 1;
-    height = input.readUint24() + 1;
-    duration = input.readUint24();
-    int b = input.readByte();
+  WebPFrame(InputBuffer input, int size)
+      : x = input.readUint24() * 2,
+        y = input.readUint24() * 2,
+        width = input.readUint24() + 1,
+        height = input.readUint24() + 1,
+        duration = input.readUint24() {
+    final b = input.readByte();
     _reserved = (b & 0x7F) >> 7;
     clearFrame = (b & 0x1) != 0;
 
@@ -41,11 +41,11 @@ class WebPFrame {
   bool get isValid => _reserved == 0;
 
   int _reserved = 1;
-  int _framePosition;
-  int _frameSize;
+  late int _framePosition;
+  late int _frameSize;
 
   // Size of an animation frame header.
-  static const int _ANIMF_HEADER_SIZE = 16;
+  static const _ANIMF_HEADER_SIZE = 16;
 }
 
 @internal
